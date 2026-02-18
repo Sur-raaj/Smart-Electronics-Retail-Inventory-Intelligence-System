@@ -7,24 +7,20 @@ import Home from './pages/Home'
 import Wishlist from './pages/Customer/Wishlist'
 import Cart from './pages/Customer/Cart'
 import Login from './pages/Customer/Login'
-import Profile from './pages/Customer/Profile' // Assuming you'll create a profile page
 
 function ScrollToTop() {
   const { pathname } = useLocation()
+
   useEffect(() => {
     window.scrollTo({ top: 0, left: 0, behavior: 'auto' })
   }, [pathname])
+
   return null
 }
 
 export default function App() {
   const [cartItems, setCartItems] = useState([])
   const [wishlistItems, setWishlistItems] = useState([])
-  const [user, setUser] = useState(null); // Add user state
-  
-  const location = useLocation();
-  // Check if current page is login to hide Navbar/Footer
-  const isLoginPage = location.pathname === '/login';
 
   const addToCart = (product) => {
     setCartItems(prev => {
@@ -59,8 +55,13 @@ export default function App() {
     setWishlistItems(prev => prev.filter(item => item.id !== id))
   }
 
-  const clearWishlist = () => setWishlistItems([])
-  const clearCart = () => setCartItems([])
+  const clearWishlist = () => {
+    setWishlistItems([])
+  }
+
+  const clearCart = () => {
+    setCartItems([])
+  }
 
   const moveAllToCart = () => {
     setCartItems(prev => {
@@ -81,31 +82,16 @@ export default function App() {
   return (
     <div className="App">
       <ScrollToTop />
-      
-      {/* 1. Hide Navbar if on login page */}
-      {!isLoginPage && (
-        <Navbar 
-          cartCount={cartItems.reduce((acc, item) => acc + item.quantity, 0)} 
-          wishlistCount={wishlistItems.length} 
-          user={user} 
-        />
-      )}
-
-      <main className={isLoginPage ? "" : "main-content"}>
+      <Navbar cartCount={cartItems.reduce((acc, item) => acc + item.quantity, 0)} wishlistCount={wishlistItems.length} />
+      <main className="main-content">
         <Routes>
           <Route path="/" element={<Home addToCart={addToCart} toggleWishlist={toggleWishlist} wishlistItems={wishlistItems} />} />
           <Route path="/wishlist" element={<Wishlist items={wishlistItems} removeFromWishlist={removeFromWishlist} addToCart={addToCart} clearWishlist={clearWishlist} moveAllToCart={moveAllToCart} />} />
           <Route path="/cart" element={<Cart cartItems={cartItems} updateCartQuantity={updateCartQuantity} removeFromCart={removeFromCart} clearCart={clearCart} />} />
-          
-          {/* 2. Pass setUser to Login so it can log the user in */}
-          <Route path="/login" element={<Login setUser={setUser} />} />
-          
-          <Route path="/profile" element={<Profile user={user} />} />
+          <Route path="/login" element={<Login />} />
         </Routes>
       </main>
-
-      {/* 3. Hide Footer if on login page */}
-      {!isLoginPage && <Footer />}
+      <Footer />
     </div>
   )
 }

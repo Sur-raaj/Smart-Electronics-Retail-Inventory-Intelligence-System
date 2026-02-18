@@ -1,16 +1,16 @@
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import {
   ShoppingBag,
   Trash2,
   Minus,
   Plus,
   ArrowRight,
-  ChevronRight,
   CreditCard,
   ShieldCheck,
-  Truck
+  Truck,
+  Check
 } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 /* ── toast replacement ───────────────────────────────────── */
 const toast = ({ title, description }) => console.info(`${title}: ${description}`);
@@ -34,24 +34,8 @@ const styles = {
     maxWidth: 1200,
     margin: "0 auto",
   },
-  /* breadcrumb */
-  breadcrumb: {
-    marginBottom: 24,
-    display: "flex",
-    alignItems: "center",
-    gap: 6,
-    fontSize: 12,
-    color: "#64748b",
-  },
-  breadcrumbLink: {
-    color: "#64748b",
-    textDecoration: "none",
-    transition: "color .2s",
-  },
-  breadcrumbActive: {
-    color: "#F97316",
-    fontWeight: 500,
-  },
+
+  
   /* header */
   headerWrap: {
     marginBottom: 32,
@@ -121,6 +105,24 @@ const styles = {
     display: "flex",
     flexDirection: "column",
     justifyContent: "space-between",
+  },
+  itemSelectWrap: {
+    display: "flex",
+    alignItems: "flex-start",
+    marginRight: 4,
+  },
+  itemSelectBtn: {
+    width: 22,
+    height: 22,
+    borderRadius: 6,
+    border: "2px solid #cbd5e1",
+    background: "#fff",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    cursor: "pointer",
+    transition: "all .2s",
+    marginTop: 4,
   },
   itemCat: {
     fontSize: 11,
@@ -208,6 +210,33 @@ const styles = {
     color: "#1e293b",
     marginBottom: 20,
   },
+  selectedPill: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 6,
+    background: "#fff7ed",
+    border: "1px solid #fed7aa",
+    borderRadius: 999,
+    padding: "4px 12px",
+    fontSize: 12,
+    fontWeight: 700,
+    color: "#F97316",
+    marginBottom: 14,
+  },
+  selectAllBtn: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 8,
+    border: "1px solid #e2e8f0",
+    background: "#fff",
+    borderRadius: 8,
+    color: "#334155",
+    padding: "8px 14px",
+    fontSize: 13,
+    fontWeight: 600,
+    cursor: "pointer",
+    transition: "all .2s",
+  },
   summaryRow: {
     display: "flex",
     justifyContent: "space-between",
@@ -247,7 +276,7 @@ const styles = {
     justifyContent: "center",
     gap: 8,
     padding: "14px",
-    background: "#F97316",
+    background: "#dc7023",
     color: "#ffffff",
     border: "none",
     borderRadius: 12,
@@ -256,6 +285,12 @@ const styles = {
     cursor: "pointer",
     boxShadow: "0 4px 12px rgba(249,115,22,0.25)",
     transition: "background .2s, transform .1s",
+  },
+  checkoutBtnDisabled: {
+    background: "#ed871b",
+    color: "#ffffff",
+    cursor: "not-allowed",
+    boxShadow: "none",
   },
   features: {
     marginTop: 24,
@@ -297,11 +332,60 @@ const styles = {
 };
 
 /* ── component ───────────────────────────────────────────── */
-const Cart = ({ cartItems = [], updateCartQuantity, removeFromCart, clearCart }) => {
+const Cart = ({ cartItems = [], updateCartQuantity, removeFromCart, clearCart, checkoutSelection = [], setCheckoutItems }) => {
+  const navigate = useNavigate();
+  const [selectedIds, setSelectedIds] = useState(
+    checkoutSelection.length > 0 ? checkoutSelection : cartItems.map((item) => item.id)
+  );
+
+  useEffect(() => {
+    setSelectedIds((prev) => {
+      const validIds = prev.filter((id) => cartItems.some((item) => item.id === id));
+      if (validIds.length === 0 && cartItems.length > 0) {
+        return cartItems.map((item) => item.id);
+      }
+      return validIds;
+    });
+  }, [cartItems]);
+
+  useEffect(() => {
+    if (checkoutSelection.length > 0) {
+      const valid = checkoutSelection.filter((id) => cartItems.some((item) => item.id === id));
+      if (valid.length > 0) setSelectedIds(valid);
+    }
+  }, [checkoutSelection, cartItems]);
+
+  const toggleSelect = (id) => {
+    setSelectedIds((prev) =>
+      prev.includes(id) ? prev.filter((itemId) => itemId !== id) : [...prev, id]
+    );
+  };
+
+  const selectAll = () => {
+    setSelectedIds(cartItems.map((item) => item.id));
+  };
+
+  const clearSelection = () => {
+    setSelectedIds([]);
+  };
+
+  const selectedItems = cartItems.filter((item) => selectedIds.includes(item.id));
   const totalItems = cartItems.reduce((acc, item) => acc + item.quantity, 0);
-  const subtotal = cartItems.reduce((acc, item) => acc + item.price * item.quantity, 0);
+  const subtotal = selectedItems.reduce((acc, item) => acc + item.price * item.quantity, 0);
   const tax = subtotal * 0.18; // 18% GST assumption
   const total = subtotal + tax;
+  const isCheckoutDisabled = selectedIds.length === 0;
+
+  const handleProceedCheckout = () => {
+    if (selectedIds.length === 0) {
+      toast({ title: "Select products", description: "Please select at least one product for checkout." });
+      return;
+    }
+    if (typeof setCheckoutItems === "function") {
+      setCheckoutItems(selectedIds);
+    }
+    navigate("/checkout");
+  };
 
   return (
     <section style={styles.page}>
@@ -338,22 +422,45 @@ const Cart = ({ cartItems = [], updateCartQuantity, removeFromCart, clearCart })
           <div style={styles.contentGrid} className="cart-grid">
             {/* Items List */}
             <div style={styles.itemsList}>
-              <button
-                onClick={clearCart}
-                style={styles.clearCartBtn}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = "#fe5555";
-                  e.currentTarget.style.color = "#ffffff";
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = "transparent";
-                  e.currentTarget.style.color = "#fe5555";
-                }}
-              >
-                <Trash2 size={16} /> Clear Cart
-              </button>
+              <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                <button
+                  onClick={clearCart}
+                  style={styles.clearCartBtn}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = "#fe5555";
+                    e.currentTarget.style.color = "#ffffff";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = "transparent";
+                    e.currentTarget.style.color = "#fe5555";
+                  }}
+                >
+                  <Trash2 size={16} /> Clear Cart
+                </button>
+                <button
+                  onClick={selectedIds.length === cartItems.length ? clearSelection : selectAll}
+                  style={styles.selectAllBtn}
+                  onMouseEnter={(e) => (e.currentTarget.style.borderColor = "#F97316")}
+                  onMouseLeave={(e) => (e.currentTarget.style.borderColor = "#e2e8f0")}
+                >
+                  {selectedIds.length === cartItems.length ? "Unselect All" : "Select All"}
+                </button>
+              </div>
               {cartItems.map((item) => (
                 <div key={item.id} style={styles.cartItem}>
+                  <div style={styles.itemSelectWrap}>
+                    <button
+                      onClick={() => toggleSelect(item.id)}
+                      style={{
+                        ...styles.itemSelectBtn,
+                        borderColor: selectedIds.includes(item.id) ? "#F97316" : "#cbd5e1",
+                        background: selectedIds.includes(item.id) ? "#fff7ed" : "#fff",
+                      }}
+                      title={selectedIds.includes(item.id) ? "Selected for checkout" : "Select for checkout"}
+                    >
+                      {selectedIds.includes(item.id) && <Check size={14} color="#F97316" />}
+                    </button>
+                  </div>
                   <Link to={`/product/${item.id}`}>
                     <img src={item.image} alt={item.name} style={styles.itemImg} />
                   </Link>
@@ -399,6 +506,7 @@ const Cart = ({ cartItems = [], updateCartQuantity, removeFromCart, clearCart })
             {/* Summary Sidebar */}
             <div style={styles.summaryCard}>
               <h3 style={styles.summaryTitle}>Order Summary</h3>
+              <div style={styles.selectedPill}>Selected: {selectedItems.length} / {cartItems.length} products</div>
               <div style={styles.summaryRow}>
                 <span>Subtotal</span>
                 <span style={styles.summaryVal}>{formatPrice(subtotal)}</span>
@@ -417,12 +525,20 @@ const Cart = ({ cartItems = [], updateCartQuantity, removeFromCart, clearCart })
                 <span style={styles.totalVal}>{formatPrice(total)}</span>
               </div>
               <button
-                style={styles.checkoutBtn}
-                onMouseEnter={(e) => (e.currentTarget.style.background = "#ea580c")}
-                onMouseLeave={(e) => (e.currentTarget.style.background = "#F97316")}
-                onClick={() => toast({ title: "Checkout", description: "Proceeding to payment..." })}
+                style={{
+                  ...styles.checkoutBtn,
+                  ...(isCheckoutDisabled ? styles.checkoutBtnDisabled : {}),
+                }}
+                onMouseEnter={(e) => {
+                  if (!isCheckoutDisabled) e.currentTarget.style.background = "#ea580c";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = isCheckoutDisabled ? styles.checkoutBtnDisabled.background : styles.checkoutBtn.background;
+                }}
+                onClick={handleProceedCheckout}
+                disabled={isCheckoutDisabled}
               >
-                Checkout <ArrowRight size={18} />
+                Checkout {selectedIds.length > 0 ? `(${selectedIds.length})` : ""} <ArrowRight size={18} />
               </button>
 
               <div style={styles.features}>
