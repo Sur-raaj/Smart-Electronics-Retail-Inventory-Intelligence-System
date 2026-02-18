@@ -1,4 +1,4 @@
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import {
   Heart,
   ShoppingCart,
@@ -382,7 +382,8 @@ const styles = {
 };
 
 /* ── component ───────────────────────────────────────────── */
-const Wishlist = ({ items = [], removeFromWishlist, addToCart, clearWishlist, moveAllToCart }) => {
+const Wishlist = ({ items = [], removeFromWishlist, addToCart, clearWishlist, moveAllToCart, buyNowFromWishlist }) => {
+  const navigate = useNavigate();
   const [removingId, setRemovingId] = useState(null);
   const [addingToCartId, setAddingToCartId] = useState(null);
   const [activeCategory, setActiveCategory] = useState("All");
@@ -605,9 +606,12 @@ const Wishlist = ({ items = [], removeFromWishlist, addToCart, clearWishlist, mo
                           type="button"
                           style={styles.buyNowBtn}
                           onClick={() => {
-                            if (window.confirm(`Buy ${item.name} for ${formatPrice(item.price)}?`)) {
-                              toast({ title: "Checkout", description: `Purchasing ${item.name}…` });
+                            if (typeof buyNowFromWishlist === "function") {
+                              buyNowFromWishlist(item);
+                            } else {
+                              addToCart(item);
                             }
+                            navigate("/checkout");
                           }}
                           onMouseEnter={(e) => { e.currentTarget.style.background = "#fff7ed"; }}
                           onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}

@@ -7,6 +7,7 @@ import Home from './pages/Home'
 import Wishlist from './pages/Customer/Wishlist'
 import Cart from './pages/Customer/Cart'
 import Login from './pages/Customer/Login'
+import Checkout from './pages/Customer/Checkout'
 
 function ScrollToTop() {
   const { pathname } = useLocation()
@@ -21,6 +22,8 @@ function ScrollToTop() {
 export default function App() {
   const [cartItems, setCartItems] = useState([])
   const [wishlistItems, setWishlistItems] = useState([])
+  const [checkoutSelection, setCheckoutSelection] = useState([])
+  const [pendingWishlistCheckoutIds, setPendingWishlistCheckoutIds] = useState([])
 
   const addToCart = (product) => {
     setCartItems(prev => {
@@ -34,6 +37,8 @@ export default function App() {
 
   const removeFromCart = (id) => {
     setCartItems(prev => prev.filter(item => item.id !== id))
+    setCheckoutSelection(prev => prev.filter(itemId => itemId !== id))
+    setPendingWishlistCheckoutIds(prev => prev.filter(itemId => itemId !== id))
   }
 
   const updateCartQuantity = (id, quantity) => {
@@ -53,14 +58,38 @@ export default function App() {
 
   const removeFromWishlist = (id) => {
     setWishlistItems(prev => prev.filter(item => item.id !== id))
+    setPendingWishlistCheckoutIds(prev => prev.filter(itemId => itemId !== id))
   }
 
   const clearWishlist = () => {
     setWishlistItems([])
+    setPendingWishlistCheckoutIds([])
   }
 
   const clearCart = () => {
     setCartItems([])
+    setCheckoutSelection([])
+  }
+
+  const setCheckoutItems = (itemIds) => {
+    setCheckoutSelection(itemIds)
+    setPendingWishlistCheckoutIds([])
+  }
+
+  const buyNowFromWishlist = (product) => {
+    addToCart(product)
+    setCheckoutSelection([product.id])
+    setPendingWishlistCheckoutIds([product.id])
+  }
+
+  const removePurchasedFromCart = (purchasedIds) => {
+    if (!Array.isArray(purchasedIds) || purchasedIds.length === 0) return
+    setCartItems(prev => prev.filter(item => !purchasedIds.includes(item.id)))
+    setCheckoutSelection([])
+    if (pendingWishlistCheckoutIds.length > 0) {
+      setWishlistItems(prev => prev.filter(item => !(pendingWishlistCheckoutIds.includes(item.id) && purchasedIds.includes(item.id))))
+    }
+    setPendingWishlistCheckoutIds([])
   }
 
   const moveAllToCart = () => {
@@ -77,6 +106,7 @@ export default function App() {
       return newCart
     })
     setWishlistItems([])
+    setPendingWishlistCheckoutIds([])
   }
 
   return (
@@ -86,8 +116,9 @@ export default function App() {
       <main className="main-content">
         <Routes>
           <Route path="/" element={<Home addToCart={addToCart} toggleWishlist={toggleWishlist} wishlistItems={wishlistItems} />} />
-          <Route path="/wishlist" element={<Wishlist items={wishlistItems} removeFromWishlist={removeFromWishlist} addToCart={addToCart} clearWishlist={clearWishlist} moveAllToCart={moveAllToCart} />} />
-          <Route path="/cart" element={<Cart cartItems={cartItems} updateCartQuantity={updateCartQuantity} removeFromCart={removeFromCart} clearCart={clearCart} />} />
+          <Route path="/wishlist" element={<Wishlist items={wishlistItems} removeFromWishlist={removeFromWishlist} addToCart={addToCart} clearWishlist={clearWishlist} moveAllToCart={moveAllToCart} buyNowFromWishlist={buyNowFromWishlist} />} />
+          <Route path="/cart" element={<Cart cartItems={cartItems} updateCartQuantity={updateCartQuantity} removeFromCart={removeFromCart} clearCart={clearCart} checkoutSelection={checkoutSelection} setCheckoutItems={setCheckoutItems} />} />
+          <Route path="/checkout" element={<Checkout cartItems={cartItems} selectedIds={checkoutSelection} onPaymentSuccess={removePurchasedFromCart} />} />
           <Route path="/login" element={<Login />} />
         </Routes>
       </main>
