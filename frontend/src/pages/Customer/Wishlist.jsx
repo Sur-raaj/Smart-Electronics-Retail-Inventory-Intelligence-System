@@ -17,49 +17,6 @@ import { useState, useMemo, useCallback } from "react";
 const toast = ({ title, description }) => console.info(`${title}: ${description}`);
 
 /* ── data ────────────────────────────────────────────────── */
-const initialItems = [
-  {
-    id: 1,
-    name: "Sony WH-1000XM5",
-    price: 29999,
-    image: "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&w=900&q=80",
-    category: "Audio",
-    inStock: true,
-    rating: 4.5,
-    addedDaysAgo: 2,
-  },
-  {
-    id: 2,
-    name: "iPhone 15 Pro Max",
-    price: 119900,
-    image: "https://images.unsplash.com/photo-1695048133142-1a20484d2569?auto=format&fit=crop&w=900&q=80",
-    category: "Smartphones",
-    inStock: true,
-    rating: 4.8,
-    addedDaysAgo: 5,
-  },
-  {
-    id: 3,
-    name: "ASUS ROG Zephyrus",
-    price: 164999,
-    image: "https://images.unsplash.com/photo-1593642634443-44adaa06623a?auto=format&fit=crop&w=900&q=80",
-    category: "Laptops",
-    inStock: true,
-    rating: 4.3,
-    addedDaysAgo: 1,
-  },
-  {
-    id: 4,
-    name: "Apple Watch Ultra 2",
-    price: 84999,
-    image: "https://images.unsplash.com/photo-1579586337278-3f436f25d4d6?auto=format&fit=crop&w=900&q=80",
-    category: "Wearables",
-    inStock: true,
-    rating: 4.7,
-    addedDaysAgo: 10,
-  },
-];
-
 const categories = ["All", "Audio", "Smartphones", "Laptops", "Wearables"];
 
 const formatPrice = (price) =>
@@ -425,8 +382,7 @@ const styles = {
 };
 
 /* ── component ───────────────────────────────────────────── */
-const Wishlist = () => {
-  const [items, setItems] = useState(initialItems);
+const Wishlist = ({ items = [], removeFromWishlist, addToCart, clearWishlist, moveAllToCart }) => {
   const [removingId, setRemovingId] = useState(null);
   const [addingToCartId, setAddingToCartId] = useState(null);
   const [activeCategory, setActiveCategory] = useState("All");
@@ -453,7 +409,7 @@ const Wishlist = () => {
   const handleRemove = useCallback((id, name) => {
     setRemovingId(id);
     setTimeout(() => {
-      setItems((prev) => prev.filter((i) => i.id !== id));
+      removeFromWishlist(id);
       setRemovingId(null);
       toast({ title: "Removed", description: `${name} removed from wishlist.` });
     }, 350);
@@ -463,12 +419,14 @@ const Wishlist = () => {
     setAddingToCartId(id);
     setTimeout(() => {
       setAddingToCartId(null);
-      toast({ title: "Added to cart", description: `${name} is now in your cart.` });
+      const item = items.find(i => i.id === id);
+      addToCart(item);
+      toast({ title: "Added to cart", description: `${name} added to your cart.` });
     }, 1200);
   }, []);
 
   const handleClearAll = useCallback(() => {
-    setItems([]);
+    clearWishlist();
     toast({ title: "Wishlist cleared", description: "All items removed." });
   }, []);
 
@@ -483,11 +441,12 @@ const Wishlist = () => {
         clearInterval(interval);
         setTimeout(() => {
           setMoveAllProgress(null);
-          toast({ title: "All moved", description: `${total} items added to cart.` });
+          moveAllToCart();
+          toast({ title: "All moved", description: `${total} items moved to cart.` });
         }, 400);
       }
-    }, 500);
-  }, [items.length]);
+    }, 200);
+  }, [items.length, moveAllToCart]);
 
   /* ── render ──────────────────────────────────────────── */
   return (
@@ -701,9 +660,7 @@ const Wishlist = () => {
                 <button
                   type="button"
                   style={styles.moveAllBtn}
-                  onClick={() => {
-                    if (window.confirm(`Move all ${items.length} items to cart?`)) handleMoveAll();
-                  }}
+                  onClick={handleMoveAll}
                   onMouseEnter={(e) => { e.currentTarget.style.background = "#fff7ed"; }}
                   onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
                 >

@@ -3,7 +3,6 @@ import { Link, useLocation } from 'react-router-dom'
 import { FiSearch, FiHeart, FiShoppingCart, FiUser, FiChevronDown } from 'react-icons/fi'
 
 const navItems = [
-  { label: 'All Products', path: '/products' },
   { label: 'Laptops', path: '/products?cat=Laptops' },
   { label: 'Smartphones', path: '/products?cat=Smartphones' },
   { label: 'Audio', path: '/products?cat=Audio' },
@@ -14,7 +13,7 @@ const navItems = [
   { label: 'Accessories', path: '/products?cat=Accessories' },
 ]
 
-export default function Navbar() {
+export default function Navbar({ cartCount = 0, wishlistCount = 0 }) {
   const [searchFocused, setSearchFocused] = useState(false)
   const [searchVal, setSearchVal] = useState('')
   const location = useLocation()
@@ -62,13 +61,13 @@ export default function Navbar() {
             <Link to="/wishlist" className="action-btn" aria-label="Wishlist">
               <FiHeart size={20} />
               <span className="action-label">Wishlist</span>
-              <span className="action-badge">2</span>
+              {wishlistCount > 0 && <span className="action-badge">{wishlistCount}</span>}
             </Link>
-            <button className="action-btn" aria-label="Cart">
+            <Link to="/cart" className="action-btn" aria-label="Cart">
               <FiShoppingCart size={20} />
               <span className="action-label">Cart</span>
-              <span className="action-badge">5</span>
-            </button>
+              {cartCount > 0 && <span className="action-badge">{cartCount}</span>}
+            </Link>
             <div className="divider" />
             <button className="signin-btn">
               <FiUser size={17} />

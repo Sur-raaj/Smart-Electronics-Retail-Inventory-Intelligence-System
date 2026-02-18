@@ -1,445 +1,457 @@
-import React from 'react';
-import { Minus, Plus, Trash2, ShoppingBag, ArrowRight } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link } from "react-router-dom";
+import {
+  ShoppingBag,
+  Trash2,
+  Minus,
+  Plus,
+  ArrowRight,
+  ChevronRight,
+  CreditCard,
+  ShieldCheck,
+  Truck
+} from "lucide-react";
+import { useState } from "react";
 
-const CartPage = ({ cartItems, removeFromCart, updateCartQuantity }) => {
-  const totalCartItems = cartItems.reduce((total, item) => total + item.quantity, 0);
-  const subtotal = cartItems.reduce((total, item) => total + (item.price * item.quantity), 0);
-  const tax = subtotal * 0.08; // 8% tax
+/* ── toast replacement ───────────────────────────────────── */
+const toast = ({ title, description }) => console.info(`${title}: ${description}`);
+
+/* ── data ────────────────────────────────────────────────── */
+const formatPrice = (price) =>
+  new Intl.NumberFormat("en-IN", {
+    style: "currency",
+    currency: "INR",
+    maximumFractionDigits: 0,
+  }).format(price);
+
+/* ── styles ──────────────────────────────────────────────── */
+const styles = {
+  page: {
+    minHeight: "100vh",
+    background: "linear-gradient(180deg, #fff7ed 0%, #ffffff 35%)",
+    padding: "48px 24px 64px",
+  },
+  container: {
+    maxWidth: 1200,
+    margin: "0 auto",
+  },
+  /* breadcrumb */
+  breadcrumb: {
+    marginBottom: 24,
+    display: "flex",
+    alignItems: "center",
+    gap: 6,
+    fontSize: 12,
+    color: "#64748b",
+  },
+  breadcrumbLink: {
+    color: "#64748b",
+    textDecoration: "none",
+    transition: "color .2s",
+  },
+  breadcrumbActive: {
+    color: "#F97316",
+    fontWeight: 500,
+  },
+  /* header */
+  headerWrap: {
+    marginBottom: 32,
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "flex-end",
+  },
+  title: {
+    fontSize: "clamp(1.75rem, 4vw, 2.5rem)",
+    fontWeight: 800,
+    color: "#1e293b",
+    lineHeight: 1.15,
+  },
+  subtitle: {
+    marginTop: 8,
+    fontSize: 15,
+    color: "#64748b",
+  },
+  clearCartBtn: {
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    background: "transparent",
+    border: "1px solid #fecaca",
+    color: "#ef4444",
+    padding: "8px 16px",
+    borderRadius: 8,
+    fontSize: 13,
+    fontWeight: 600,
+    cursor: "pointer",
+    transition: "all .2s",
+    height: "fit-content",
+    alignSelf: "flex-end",
+  },
+  /* layout */
+  contentGrid: {
+    display: "grid",
+    gridTemplateColumns: "1fr 380px",
+    gap: 32,
+    alignItems: "start",
+  },
+  /* cart items */
+  itemsList: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 16,
+  },
+  cartItem: {
+    display: "flex",
+    gap: 20,
+    padding: 20,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    borderRadius: 16,
+    boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
+    transition: "transform .2s, box-shadow .2s",
+  },
+  itemImg: {
+    width: 100,
+    height: 100,
+    borderRadius: 12,
+    objectFit: "cover",
+    background: "#f1f5f9",
+  },
+  itemInfo: {
+    flex: 1,
+    display: "flex",
+    flexDirection: "column",
+    justifyContent: "space-between",
+  },
+  itemCat: {
+    fontSize: 11,
+    fontWeight: 600,
+    textTransform: "uppercase",
+    color: "#94a3b8",
+    letterSpacing: "0.05em",
+    marginBottom: 4,
+  },
+  itemName: {
+    fontSize: 16,
+    fontWeight: 700,
+    color: "#1e293b",
+    textDecoration: "none",
+    marginBottom: 4,
+    display: "block",
+  },
+  itemPrice: {
+    fontSize: 18,
+    fontWeight: 700,
+    color: "#F97316",
+  },
+  itemActions: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginTop: 12,
+  },
+  qtyWrap: {
+    display: "flex",
+    alignItems: "center",
+    gap: 12,
+    background: "#f8fafc",
+    padding: "4px 6px",
+    borderRadius: 8,
+    border: "1px solid #e2e8f0",
+  },
+  qtyBtn: {
+    width: 24,
+    height: 24,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    background: "#ffffff",
+    border: "1px solid #cbd5e1",
+    borderRadius: 6,
+    cursor: "pointer",
+    color: "#334155",
+    transition: "all .2s",
+  },
+  qtyVal: {
+    fontSize: 14,
+    fontWeight: 600,
+    color: "#1e293b",
+    minWidth: 20,
+    textAlign: "center",
+  },
+  removeBtn: {
+    display: "flex",
+    alignItems: "center",
+    gap: 6,
+    background: "transparent",
+    border: "none",
+    color: "#ef4444",
+    fontSize: 13,
+    fontWeight: 500,
+    cursor: "pointer",
+    padding: "6px 10px",
+    borderRadius: 8,
+    transition: "background .2s",
+  },
+  /* summary sidebar */
+  summaryCard: {
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    borderRadius: 20,
+    padding: 24,
+    boxShadow: "0 4px 20px rgba(0,0,0,0.06)",
+    position: "sticky",
+    top: 100,
+  },
+  summaryTitle: {
+    fontSize: 18,
+    fontWeight: 700,
+    color: "#1e293b",
+    marginBottom: 20,
+  },
+  summaryRow: {
+    display: "flex",
+    justifyContent: "space-between",
+    marginBottom: 12,
+    fontSize: 14,
+    color: "#64748b",
+  },
+  summaryVal: {
+    fontWeight: 600,
+    color: "#1e293b",
+  },
+  divider: {
+    height: 1,
+    background: "#e2e8f0",
+    margin: "20px 0",
+  },
+  totalRow: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "flex-end",
+    marginBottom: 24,
+  },
+  totalLabel: {
+    fontSize: 16,
+    fontWeight: 600,
+    color: "#1e293b",
+  },
+  totalVal: {
+    fontSize: 24,
+    fontWeight: 800,
+    color: "#F97316",
+  },
+  checkoutBtn: {
+    width: "100%",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    padding: "14px",
+    background: "#F97316",
+    color: "#ffffff",
+    border: "none",
+    borderRadius: 12,
+    fontSize: 15,
+    fontWeight: 600,
+    cursor: "pointer",
+    boxShadow: "0 4px 12px rgba(249,115,22,0.25)",
+    transition: "background .2s, transform .1s",
+  },
+  features: {
+    marginTop: 24,
+    display: "flex",
+    flexDirection: "column",
+    gap: 12,
+  },
+  featureItem: {
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
+    fontSize: 13,
+    color: "#64748b",
+  },
+  /* empty state */
+  emptyWrap: {
+    textAlign: "center",
+    padding: "80px 24px",
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    borderRadius: 24,
+    boxShadow: "0 2px 12px rgba(0,0,0,0.04)",
+  },
+  emptyBtn: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 8,
+    marginTop: 24,
+    padding: "12px 28px",
+    borderRadius: 12,
+    border: "none",
+    background: "#F97316",
+    color: "#fff",
+    fontSize: 15,
+    fontWeight: 600,
+    cursor: "pointer",
+    boxShadow: "0 4px 14px rgba(249,115,22,0.35)",
+  },
+};
+
+/* ── component ───────────────────────────────────────────── */
+const Cart = ({ cartItems = [], updateCartQuantity, removeFromCart, clearCart }) => {
+  const totalItems = cartItems.reduce((acc, item) => acc + item.quantity, 0);
+  const subtotal = cartItems.reduce((acc, item) => acc + item.price * item.quantity, 0);
+  const tax = subtotal * 0.18; // 18% GST assumption
   const total = subtotal + tax;
 
-  if (cartItems.length === 0) {
-    return (
-      <div className="empty-cart-container">
-        <div className="empty-cart-content">
-          <div className="cart-icon-wrapper">
-            <ShoppingBag size={80} strokeWidth={1.5} />
+  return (
+    <section style={styles.page}>
+      <div style={styles.container}>
+
+        {/* Header */}
+        <div style={styles.headerWrap}>
+          <div>
+            <h1 style={styles.title}>Your Cart</h1>
+            <p style={styles.subtitle}>
+              {cartItems.length > 0
+                ? `You have ${totalItems} items in your cart ready for checkout.`
+                : "Your cart is Feeling Lonely."}
+            </p>
           </div>
-          <h2>Your cart is empty</h2>
-          <p>Start shopping to add items to your cart</p>
-          <Link to="/products" className="browse-btn">
-            <ShoppingBag size={18} />
-            <span>Browse Products</span>
-          </Link>
         </div>
 
-        <style jsx>{`
-          .empty-cart-container {
-            min-height: 70vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            background: #f8f9fa;
-          }
-
-          .empty-cart-content {
-            text-align: center;
-            padding: 3rem 2rem;
-          }
-
-          .cart-icon-wrapper {
-            color: #5b47fb;
-            margin-bottom: 1.5rem;
-            opacity: 0.3;
-          }
-
-          .empty-cart-content h2 {
-            font-size: 1.75rem;
-            font-weight: 700;
-            color: #1a1a1a;
-            margin-bottom: 0.5rem;
-          }
-
-          .empty-cart-content p {
-            font-size: 1rem;
-            color: #666;
-            margin-bottom: 2rem;
-          }
-
-          .browse-btn {
-            display: inline-flex;
-            align-items: center;
-            gap: 0.5rem;
-            padding: 0.875rem 1.75rem;
-            background: #5b47fb;
-            color: white;
-            border: none;
-            border-radius: 8px;
-            font-size: 0.95rem;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            text-decoration: none;
-          }
-
-          .browse-btn:hover {
-            background: #4a38d9;
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(91, 71, 251, 0.3);
-          }
-        `}</style>
-      </div>
-    );
-  }
-
-  return (
-    <div className="cart-page">
-      <div className="cart-container">
-        <div className="cart-main">
-          <h1>Shopping Cart ({totalCartItems} item{totalCartItems !== 1 ? 's' : ''})</h1>
-
-          <div className="cart-items">
-            {cartItems.map((item) => (
-              <div key={item.id} className="cart-item">
-                <img src={item.image} alt={item.name} />
-                <div className="item-info">
-                  <h3>{item.name}</h3>
-                  <p className="item-price">${item.price.toFixed(2)}</p>
-                </div>
-                <div className="item-actions">
-                  <div className="quantity-controls">
-                    <button
-                      onClick={() => updateCartQuantity(item.id, item.quantity - 1)}
-                      aria-label="Decrease quantity"
-                    >
-                      <Minus size={16} />
-                    </button>
-                    <span className="quantity">{item.quantity}</span>
-                    <button
-                      onClick={() => updateCartQuantity(item.id, item.quantity + 1)}
-                      aria-label="Increase quantity"
-                    >
-                      <Plus size={16} />
-                    </button>
+        {cartItems.length === 0 ? (
+          <div style={styles.emptyWrap}>
+            <ShoppingBag size={64} color="#F97316" strokeWidth={1.5} style={{ opacity: 0.8 }} />
+            <h2 style={{ fontSize: 24, fontWeight: 700, color: "#1e293b", marginTop: 20 }}>
+              Your cart is Feeling Lonely
+            </h2>
+            <p style={{ color: "#64748b", marginTop: 8 }}>
+              Looks like you haven't added anything yet.
+            </p>
+            <Link to="/">
+              <button style={styles.emptyBtn}>
+                <ArrowRight size={18} /> Start Shopping
+              </button>
+            </Link>
+          </div>
+        ) : (
+          <div style={styles.contentGrid} className="cart-grid">
+            {/* Items List */}
+            <div style={styles.itemsList}>
+              <button
+                onClick={clearCart}
+                style={styles.clearCartBtn}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = "#fe5555";
+                  e.currentTarget.style.color = "#ffffff";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = "transparent";
+                  e.currentTarget.style.color = "#fe5555";
+                }}
+              >
+                <Trash2 size={16} /> Clear Cart
+              </button>
+              {cartItems.map((item) => (
+                <div key={item.id} style={styles.cartItem}>
+                  <Link to={`/product/${item.id}`}>
+                    <img src={item.image} alt={item.name} style={styles.itemImg} />
+                  </Link>
+                  <div style={styles.itemInfo}>
+                    <div>
+                      <span style={styles.itemCat}>{item.category}</span>
+                      <Link to={`/product/${item.id}`} style={styles.itemName}>
+                        {item.name}
+                      </Link>
+                      <div style={styles.itemPrice}>{formatPrice(item.price)}</div>
+                    </div>
+                    <div style={styles.itemActions}>
+                      <div style={styles.qtyWrap}>
+                        <button
+                          onClick={() => updateCartQuantity(item.id, item.quantity - 1)}
+                          style={styles.qtyBtn}
+                          disabled={item.quantity <= 1}
+                        >
+                          <Minus size={14} />
+                        </button>
+                        <span style={styles.qtyVal}>{item.quantity}</span>
+                        <button
+                          onClick={() => updateCartQuantity(item.id, item.quantity + 1)}
+                          style={styles.qtyBtn}
+                        >
+                          <Plus size={14} />
+                        </button>
+                      </div>
+                      <button
+                        onClick={() => removeFromCart(item.id)}
+                        style={styles.removeBtn}
+                        onMouseEnter={(e) => (e.currentTarget.style.background = "#fef2f2")}
+                        onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                      >
+                        <Trash2 size={16} /> Remove
+                      </button>
+                    </div>
                   </div>
-                  <div className="item-total">${(item.price * item.quantity).toFixed(2)}</div>
-                  <button
-                    className="remove-btn"
-                    onClick={() => removeFromCart(item.id)}
-                    aria-label="Remove item"
-                  >
-                    <Trash2 size={18} />
-                  </button>
+                </div>
+              ))}
+            </div>
+
+            {/* Summary Sidebar */}
+            <div style={styles.summaryCard}>
+              <h3 style={styles.summaryTitle}>Order Summary</h3>
+              <div style={styles.summaryRow}>
+                <span>Subtotal</span>
+                <span style={styles.summaryVal}>{formatPrice(subtotal)}</span>
+              </div>
+              <div style={styles.summaryRow}>
+                <span>Shipping estimate</span>
+                <span style={{ ...styles.summaryVal, color: "#16a34a" }}>Free</span>
+              </div>
+              <div style={styles.summaryRow}>
+                <span>Tax estimate (18%)</span>
+                <span style={styles.summaryVal}>{formatPrice(tax)}</span>
+              </div>
+              <div style={styles.divider} />
+              <div style={styles.totalRow}>
+                <span style={styles.totalLabel}>Order Total</span>
+                <span style={styles.totalVal}>{formatPrice(total)}</span>
+              </div>
+              <button
+                style={styles.checkoutBtn}
+                onMouseEnter={(e) => (e.currentTarget.style.background = "#ea580c")}
+                onMouseLeave={(e) => (e.currentTarget.style.background = "#F97316")}
+                onClick={() => toast({ title: "Checkout", description: "Proceeding to payment..." })}
+              >
+                Checkout <ArrowRight size={18} />
+              </button>
+
+              <div style={styles.features}>
+                <div style={styles.featureItem}>
+                  <ShieldCheck size={16} color="#16a34a" />
+                  <span>Secure SSL Encryption</span>
+                </div>
+                <div style={styles.featureItem}>
+                  <Truck size={16} color="#F97316" />
+                  <span>Free shipping on this order</span>
+                </div>
+                <div style={styles.featureItem}>
+                  <CreditCard size={16} color="#64748b" />
+                  <span>All major cards accepted</span>
                 </div>
               </div>
-            ))}
+            </div>
           </div>
-
-          <button className="clear-cart-btn" onClick={() => cartItems.forEach(item => removeFromCart(item.id))}>
-            <Trash2 size={16} />
-            Clear Cart
-          </button>
-        </div>
-
-        <div className="cart-sidebar">
-          <div className="order-summary">
-            <h2>Order Summary</h2>
-            <div className="summary-row">
-              <span>Subtotal ({totalCartItems} item{totalCartItems !== 1 ? 's' : ''})</span>
-              <span>${subtotal.toFixed(2)}</span>
-            </div>
-            <div className="summary-row">
-              <span>Shipping</span>
-              <span className="free-shipping">Free</span>
-            </div>
-            <div className="summary-row">
-              <span>Tax (estimated)</span>
-              <span>${tax.toFixed(2)}</span>
-            </div>
-            <div className="summary-divider"></div>
-            <div className="summary-total">
-              <span>Total</span>
-              <span className="total-amount">${total.toFixed(2)}</span>
-            </div>
-            <button className="checkout-btn">
-              <span>Checkout</span>
-              <ArrowRight size={18} />
-            </button>
-          </div>
-        </div>
+        )}
       </div>
-
-      <style jsx>{`
-        .cart-page {
-          min-height: 70vh;
-          background: #f8f9fa;
-          padding: 2rem 0;
-        }
-
-        .cart-container {
-          max-width: 1200px;
-          margin: 0 auto;
-          padding: 0 2rem;
-          display: grid;
-          grid-template-columns: 1fr 400px;
-          gap: 2rem;
-        }
-
-        .cart-main h1 {
-          font-size: 1.75rem;
-          font-weight: 700;
-          color: #1a1a1a;
-          margin-bottom: 1.5rem;
-        }
-
-        .cart-items {
-          background: white;
-          border-radius: 12px;
-          overflow: hidden;
-          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
-        }
-
-        .cart-item {
-          display: grid;
-          grid-template-columns: 80px 1fr auto;
-          gap: 1.25rem;
-          padding: 1.5rem;
-          border-bottom: 1px solid #f0f0f0;
-        }
-
-        .cart-item:last-child {
-          border-bottom: none;
-        }
-
-        .cart-item img {
-          width: 80px;
-          height: 80px;
-          object-fit: cover;
-          border-radius: 8px;
-          background: #f8f9fa;
-        }
-
-        .item-info {
-          display: flex;
-          flex-direction: column;
-          justify-content: center;
-        }
-
-        .item-info h3 {
-          font-size: 1rem;
-          font-weight: 600;
-          color: #1a1a1a;
-          margin-bottom: 0.5rem;
-        }
-
-        .item-price {
-          font-size: 1.125rem;
-          color: #5b47fb;
-          font-weight: 700;
-          margin: 0;
-        }
-
-        .item-actions {
-          display: flex;
-          align-items: center;
-          gap: 1.5rem;
-        }
-
-        .quantity-controls {
-          display: flex;
-          align-items: center;
-          gap: 0.75rem;
-          background: #f8f9fa;
-          border-radius: 8px;
-          padding: 0.5rem 0.75rem;
-        }
-
-        .quantity-controls button {
-          width: 28px;
-          height: 28px;
-          background: white;
-          border: 1px solid #e0e0e0;
-          border-radius: 6px;
-          cursor: pointer;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          color: #333;
-          transition: all 0.2s ease;
-        }
-
-        .quantity-controls button:hover {
-          background: #5b47fb;
-          color: white;
-          border-color: #5b47fb;
-        }
-
-        .quantity {
-          font-size: 0.95rem;
-          font-weight: 600;
-          color: #1a1a1a;
-          min-width: 24px;
-          text-align: center;
-        }
-
-        .item-total {
-          font-size: 1.125rem;
-          font-weight: 700;
-          color: #1a1a1a;
-          min-width: 80px;
-          text-align: right;
-        }
-
-        .remove-btn {
-          width: 36px;
-          height: 36px;
-          background: transparent;
-          border: none;
-          border-radius: 6px;
-          color: #999;
-          cursor: pointer;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          transition: all 0.2s ease;
-        }
-
-        .remove-btn:hover {
-          background: #fee;
-          color: #ef4444;
-        }
-
-        .clear-cart-btn {
-          display: inline-flex;
-          align-items: center;
-          gap: 0.5rem;
-          margin-top: 1rem;
-          padding: 0.625rem 1.25rem;
-          background: transparent;
-          border: 1px solid #e0e0e0;
-          border-radius: 8px;
-          color: #ef4444;
-          font-size: 0.875rem;
-          font-weight: 600;
-          cursor: pointer;
-          transition: all 0.2s ease;
-        }
-
-        .clear-cart-btn:hover {
-          background: #fef2f2;
-          border-color: #ef4444;
-        }
-
-        .cart-sidebar {
-          position: sticky;
-          top: 6rem;
-          height: fit-content;
-        }
-
-        .order-summary {
-          background: white;
-          border-radius: 12px;
-          padding: 1.5rem;
-          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
-        }
-
-        .order-summary h2 {
-          font-size: 1.25rem;
-          font-weight: 700;
-          color: #1a1a1a;
-          margin-bottom: 1.25rem;
-        }
-
-        .summary-row {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          margin-bottom: 1rem;
-          font-size: 0.95rem;
-        }
-
-        .summary-row span:first-child {
-          color: #666;
-        }
-
-        .summary-row span:last-child {
-          font-weight: 600;
-          color: #1a1a1a;
-        }
-
-        .free-shipping {
-          color: #10b981 !important;
-        }
-
-        .summary-divider {
-          height: 1px;
-          background: #f0f0f0;
-          margin: 1.25rem 0;
-        }
-
-        .summary-total {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          margin-bottom: 1.5rem;
-          font-size: 1.125rem;
-        }
-
-        .summary-total span:first-child {
-          font-weight: 700;
-          color: #1a1a1a;
-        }
-
-        .total-amount {
-          font-size: 1.5rem;
-          font-weight: 700;
-          color: #5b47fb;
-        }
-
-        .checkout-btn {
-          width: 100%;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 0.5rem;
-          padding: 1rem;
-          background: #5b47fb;
-          color: white;
-          border: none;
-          border-radius: 8px;
-          font-size: 1rem;
-          font-weight: 600;
-          cursor: pointer;
-          transition: all 0.3s ease;
-        }
-
-        .checkout-btn:hover {
-          background: #4a38d9;
-          transform: translateY(-2px);
-          box-shadow: 0 4px 12px rgba(91, 71, 251, 0.3);
-        }
-
-        @media (max-width: 968px) {
-          .cart-container {
-            grid-template-columns: 1fr;
-          }
-
-          .cart-sidebar {
-            position: static;
-          }
-
-          .item-actions {
-            flex-direction: column;
-            align-items: flex-end;
-            gap: 0.75rem;
-          }
-        }
-
-        @media (max-width: 640px) {
-          .cart-item {
-            grid-template-columns: 60px 1fr;
-            gap: 1rem;
-          }
-
-          .item-actions {
-            grid-column: 1 / -1;
-            flex-direction: row;
-            justify-content: space-between;
+      <style>{`
+        @media (max-width: 900px) {
+          .cart-grid {
+            grid-template-columns: 1fr !important;
           }
         }
       `}</style>
-    </div>
+    </section>
   );
 };
 
-export default CartPage;
+export default Cart;

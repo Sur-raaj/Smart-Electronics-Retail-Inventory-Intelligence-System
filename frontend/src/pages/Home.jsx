@@ -1,4 +1,4 @@
-import { FiMonitor, FiSmartphone, FiHeadphones, FiCamera, FiCpu, FiWatch } from 'react-icons/fi'
+import { FiMonitor, FiSmartphone, FiHeadphones, FiCamera, FiCpu, FiWatch, FiHeart } from 'react-icons/fi'
 
 const categories = [
     { name: 'Laptops', icon: FiMonitor },
@@ -10,15 +10,15 @@ const categories = [
 ]
 
 const featuredProducts = [
-    { id: 1, name: 'MacBook Pro 16"', category: 'Laptops', price: 2499, oldPrice: 2799, image: '💻' },
-    { id: 2, name: 'iPhone 15 Pro Max', category: 'Smartphones', price: 1199, oldPrice: 1299, image: '📱' },
-    { id: 3, name: 'Sony WH-1000XM5', category: 'Audio', price: 349, oldPrice: 399, image: '🎧' },
-    { id: 4, name: 'Canon EOS R6 Mark II', category: 'Cameras', price: 2499, oldPrice: 2699, image: '📷' },
-    { id: 5, name: 'Samsung Galaxy Tab S9', category: 'Tablets', price: 799, oldPrice: 899, image: '📱' },
-    { id: 6, name: 'Apple Watch Ultra 2', category: 'Wearables', price: 799, oldPrice: 849, image: '⌚' },
+    { id: 1, name: 'MacBook Pro 16"', category: 'Laptops', price: 2499, oldPrice: 2799, image: 'https://images.unsplash.com/photo-1517336714731-489689fd1ca8?auto=format&fit=crop&w=800&q=80', rating: 4.8 },
+    { id: 2, name: 'iPhone 15 Pro Max', category: 'Smartphones', price: 1199, oldPrice: 1299, image: 'https://images.unsplash.com/photo-1695048133142-1a20484d2569?auto=format&fit=crop&w=800&q=80', rating: 4.9 },
+    { id: 3, name: 'Sony WH-1000XM5', category: 'Audio', price: 349, oldPrice: 399, image: 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&w=800&q=80', rating: 4.7 },
+    { id: 4, name: 'Canon EOS R6 Mark II', category: 'Cameras', price: 2499, oldPrice: 2699, image: 'https://images.unsplash.com/photo-1516035069371-29a1b244cc32?auto=format&fit=crop&w=800&q=80', rating: 4.8 },
+    { id: 5, name: 'Samsung Galaxy Tab S9', category: 'Tablets', price: 799, oldPrice: 899, image: 'https://images.unsplash.com/photo-1542751110-97427bbecf20?auto=format&fit=crop&w=800&q=80', rating: 4.6 },
+    { id: 6, name: 'Apple Watch Ultra 2', category: 'Wearables', price: 799, oldPrice: 849, image: 'https://images.unsplash.com/photo-1579586337278-3f436f25d4d6?auto=format&fit=crop&w=800&q=80', rating: 4.8 },
 ]
 
-export default function Home() {
+export default function Home({ addToCart, toggleWishlist, wishlistItems = [] }) {
     return (
         <div className="home">
             {/* Hero Section */}
@@ -57,20 +57,31 @@ export default function Home() {
             <section className="section section-surface">
                 <h2 className="section-title">Featured Products</h2>
                 <div className="products-grid">
-                    {featuredProducts.map((product) => (
-                        <div key={product.id} className="product-card">
-                            <div className="product-image">{product.image}</div>
-                            <div className="product-info">
-                                <span className="product-category">{product.category}</span>
-                                <h3 className="product-name">{product.name}</h3>
-                                <div className="product-pricing">
-                                    <span className="product-price">${product.price}</span>
-                                    <span className="product-old-price">${product.oldPrice}</span>
+                    {featuredProducts.map((product) => {
+                        const isInWishlist = wishlistItems.some(item => item.id === product.id);
+                        return (
+                            <div key={product.id} className="product-card group">
+                                <div className="product-image-wrap">
+                                    <img src={product.image} alt={product.name} className="product-img" />
+                                    <button 
+                                        className={`wishlist-btn ${isInWishlist ? 'active' : ''}`}
+                                        onClick={() => toggleWishlist(product)}
+                                    >
+                                        <FiHeart size={20} className={isInWishlist ? "fill-current" : ""} />
+                                    </button>
                                 </div>
-                                <button className="btn btn-primary btn-sm">Add to Cart</button>
+                                <div className="product-info">
+                                    <span className="product-category">{product.category}</span>
+                                    <h3 className="product-name">{product.name}</h3>
+                                    <div className="product-pricing">
+                                        <span className="product-price">${product.price}</span>
+                                        <span className="product-old-price">${product.oldPrice}</span>
+                                    </div>
+                                    <button className="btn btn-primary btn-sm" onClick={() => addToCart(product)}>Add to Cart</button>
+                                </div>
                             </div>
-                        </div>
-                    ))}
+                        );
+                    })}
                 </div>
             </section>
 
@@ -265,13 +276,57 @@ export default function Home() {
           box-shadow: 0 4px 12px rgba(0,0,0,0.08);
         }
 
-        .product-image {
+        .product-image-wrap {
+          position: relative;
+          height: 150px;
+          background: #F9FAFB;
+          overflow: hidden;
+        }
+
+        .product-img {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+          transition: transform 0.3s;
+        }
+
+        .product-card:hover .product-img {
+          transform: scale(1.05);
+        }
+
+        .wishlist-btn {
+          position: absolute;
+          top: 10px;
+          right: 10px;
+          background: white;
+          border: none;
+          border-radius: 50%;
+          width: 32px;
+          height: 32px;
           display: flex;
           align-items: center;
           justify-content: center;
-          height: 150px;
-          background: #F9FAFB;
-          font-size: 3rem;
+          cursor: pointer;
+          opacity: 0;
+          transform: translateY(-5px);
+          transition: all 0.2s;
+          color: #9ca3af;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        .product-card:hover .wishlist-btn {
+          opacity: 1;
+          transform: translateY(0);
+        }
+
+        .wishlist-btn:hover {
+          color: #ef4444;
+          transform: scale(1.1);
+        }
+
+        .wishlist-btn.active {
+          opacity: 1;
+          color: #ef4444;
         }
 
         .product-info {
