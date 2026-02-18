@@ -13,7 +13,7 @@ const navItems = [
   { label: 'Accessories', path: '/products?cat=Accessories' },
 ]
 
-export default function Navbar({ cartCount = 0, wishlistCount = 0 }) {
+export default function Navbar({ cartCount = 0, wishlistCount = 0 , user = null}) {
   const [searchFocused, setSearchFocused] = useState(false)
   const [searchVal, setSearchVal] = useState('')
   const location = useLocation()
@@ -69,11 +69,11 @@ export default function Navbar({ cartCount = 0, wishlistCount = 0 }) {
               {cartCount > 0 && <span className="action-badge">{cartCount}</span>}
             </Link>
             <div className="divider" />
-            <button className="signin-btn">
+           <Link to={user ? "/profile" : "/login"} className="signin-btn">
               <FiUser size={17} />
-              <span>Sign In</span>
+              <span>{user ? `Hi, ${user.name}` : "Sign In"}</span>
               <FiChevronDown size={14} />
-            </button>
+            </Link>
           </div>
         </div>
 
