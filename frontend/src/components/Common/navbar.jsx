@@ -59,11 +59,11 @@ export default function Navbar() {
 
           {/* Actions */}
           <div className="nav-actions">
-            <button className="action-btn" aria-label="Wishlist">
+            <Link to="/wishlist" className="action-btn" aria-label="Wishlist">
               <FiHeart size={20} />
               <span className="action-label">Wishlist</span>
               <span className="action-badge">2</span>
-            </button>
+            </Link>
             <button className="action-btn" aria-label="Cart">
               <FiShoppingCart size={20} />
               <span className="action-label">Cart</span>
