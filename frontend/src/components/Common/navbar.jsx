@@ -1,474 +1,415 @@
-import React, { useState } from 'react';
-import { Heart, GitCompare, ShoppingCart, User, Search } from 'lucide-react';
+import { useState } from 'react'
+import { Link, useLocation } from 'react-router-dom'
+import { FiSearch, FiHeart, FiShoppingCart, FiUser, FiChevronDown } from 'react-icons/fi'
 
-const ElectroNestbar = () => {
-  const [searchFocused, setSearchFocused] = useState(false);
-    
+const navItems = [
+  { label: 'All Products', path: '/products' },
+  { label: 'Laptops', path: '/products?cat=Laptops' },
+  { label: 'Smartphones', path: '/products?cat=Smartphones' },
+  { label: 'Audio', path: '/products?cat=Audio' },
+  { label: 'Cameras', path: '/products?cat=Cameras' },
+  { label: 'Gaming', path: '/products?cat=Gaming' },
+  { label: 'Tablets', path: '/products?cat=Tablets' },
+  { label: 'Wearables', path: '/products?cat=Wearables' },
+  { label: 'Accessories', path: '/products?cat=Accessories' },
+]
 
-  const navItems = [
-    'All Products',
-    'Accessories',
-    'Audio',
-    'Cameras',
-    'Drones',
-    'Gaming Consoles',
-    'Laptops',
-    'Smart Home',
-    'Smartphones',
-    'Tablets',
-    'Wearables'     
-   
-    
-  ];
+export default function Navbar() {
+  const [searchFocused, setSearchFocused] = useState(false)
+  const [searchVal, setSearchVal] = useState('')
+  const location = useLocation()
 
   return (
-    <nav className="navbar">
-      {/* Top Bar */}
-      <div className="navbar-top">
-        {/* Logo */}
-        <div className="logo">
-          <div className="logo-icon">
-            <span className="logo-text">EN</span>
+    <>
+      {/* Announcement Bar */}
+      <div className="announce-bar">
+        Free shipping on orders over ₹5000 &nbsp;·&nbsp; Use code <strong>&nbsp;TECH20&nbsp;</strong> for 20% off
+      </div>
+
+      <nav className="navbar">
+        {/* Main Top Row */}
+        <div className="navbar-top">
+
+          {/* Logo */}
+          <Link to="/" className="logo">
+            <div className="logo-icon">
+              <span>EN</span>
+            </div>
+            <div className="logo-text">
+              <span className="logo-name">Electro<span className="logo-accent">Nest</span></span>
+              <span className="logo-tagline">Premium Electronics</span>
+            </div>
+          </Link>
+
+          {/* Search */}
+          <div className={`search-wrap ${searchFocused ? 'active' : ''}`}>
+            <input
+              type="text"
+              value={searchVal}
+              onChange={e => setSearchVal(e.target.value)}
+              placeholder="Search laptops, phones, accessories..."
+              onFocus={() => setSearchFocused(true)}
+              onBlur={() => setSearchFocused(false)}
+            />
+            {searchVal && (
+              <button className="search-clear" onClick={() => setSearchVal('')}>✕</button>
+            )}
+            <button className="search-btn"><FiSearch size={18} /></button>
           </div>
-          <span className="logo-brand">
-            Electro<span className="logo-brand-accent">Nest</span>
-          </span>
+
+          {/* Actions */}
+          <div className="nav-actions">
+            <button className="action-btn" aria-label="Wishlist">
+              <FiHeart size={20} />
+              <span className="action-label">Wishlist</span>
+              <span className="action-badge">2</span>
+            </button>
+            <button className="action-btn" aria-label="Cart">
+              <FiShoppingCart size={20} />
+              <span className="action-label">Cart</span>
+              <span className="action-badge">5</span>
+            </button>
+            <div className="divider" />
+            <button className="signin-btn">
+              <FiUser size={17} />
+              <span>Sign In</span>
+              <FiChevronDown size={14} />
+            </button>
+          </div>
         </div>
 
-        {/* Search Bar */}
-        <div className={`search-container ${searchFocused ? 'focused' : ''}`}>
-          <input
-            type="text"
-            placeholder="Search for laptops, phones, accessories..."
-            className="search-input"
-            onFocus={() => setSearchFocused(true)}
-            onBlur={() => setSearchFocused(false)}
-          />
-          <button className="search-button">
-            <Search size={20} />
-          </button>
+        {/* Category Nav */}
+        <div className="nav-strip">
+          <div className="nav-strip-inner">
+            {navItems.map((item) => {
+              const isActive = location.pathname === item.path || location.search.includes(item.path.split('?')[1] || '___')
+              return (
+                <Link
+                  key={item.label}
+                  to={item.path}
+                  className={`nav-link ${isActive ? 'nav-link-active' : ''}`}
+                >
+                  {item.label}
+                </Link>
+              )
+            })}
+          </div>
         </div>
+      </nav>
 
-        {/* Right Icons */}
-        <div className="navbar-actions">
-          <button className="icon-button" aria-label="Wishlist">
-            <Heart size={20} />
-            <span className="badge">1</span>
-          </button>
-          <button className="icon-button" aria-label="Compare">
-            <GitCompare size={20} />
-          </button>
-          <button className="icon-button" aria-label="Cart">
-            <ShoppingCart size={20} />
-            <span className="badge">17</span>
-          </button>
-          <button className="sign-in-button">
-            <User size={18} />
-            <span>Sign In</span>
-          </button>
-        </div>
-      </div>
-
-      {/* Navigation Links */}
-      <div className="navbar-links">
-        {navItems.map((item, index) => (
-          <a
-            key={index}
-            href="#"
-            className="nav-link"
-          >
-            {item}
-          </a>
-        ))}
-      </div>
-
-      <style jsx>{`
-        @import url('https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700&display=swap');
-
-        * {
-          margin: 0;
-          padding: 0;
-          box-sizing: border-box;
+      <style>{`
+        /* ── Announcement Bar ── */
+        .announce-bar {
+          background: #F97316;
+          color: #fff;
+          font-size: 0.78rem;
+          font-weight: 500;
+          text-align: center;
+          padding: 0.4rem 1rem;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          letter-spacing: 0.01em;
         }
 
+        /* ── Navbar Shell ── */
         .navbar {
-          font-family: 'Sora', sans-serif;
-          background: linear-gradient(135deg, #ffffff 0%, #fafafa 100%);
-          box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06);
+          background: #232F3E;
+          border-bottom: 1px solid rgba(0,0,0,0.1);
+          box-shadow: 0 1px 3px rgba(0,0,0,0.12);
           position: sticky;
           top: 0;
-          z-index: 1000;
+          z-index: 100;
           width: 100%;
         }
 
+        /* ── Top Row ── */
         .navbar-top {
-          display: grid;
-          grid-template-columns: auto 1fr auto;
+          display: flex;
           align-items: center;
-          padding: 1rem 2.5rem;
-          gap: 3rem;
-          border-bottom: 1px solid #f0f0f0;
-          width: 100%;
+          padding: 0.6rem 2rem;
+          gap: 1.25rem;
         }
 
-        /* Logo Styles */
+        /* ── Logo ── */
         .logo {
           display: flex;
           align-items: center;
-          gap: 0.75rem;
-          cursor: pointer;
-          transition: transform 0.3s ease;
+          gap: 0.6rem;
+          text-decoration: none;
           flex-shrink: 0;
-        }
-
-        .logo:hover {
-          transform: scale(1.02);
         }
 
         .logo-icon {
-          width: 50px;
-          height: 50px;
-          background: linear-gradient(135deg, #020024,#090979,#00D4FF);
-          border-radius: 14px;
+          width: 38px;
+          height: 38px;
+          background: #F97316;
+          border-radius: 8px;
           display: flex;
           align-items: center;
           justify-content: center;
-          box-shadow: 0 4px 15px rgba(37, 99, 235, 0.3);
-          transition: all 0.3s ease;
+          flex-shrink: 0;
         }
 
-        .logo:hover .logo-icon {
-          box-shadow: 0 6px 20px rgba(37, 99, 235, 0.4);
-          transform: translateY(-2px);
+        .logo-icon span {
+          color: #fff;
+          font-weight: 700;
+          font-size: 0.9rem;
         }
 
         .logo-text {
-          font-size: 1.25rem;
-          font-weight: 700;
-          color: white;
+          display: flex;
+          flex-direction: column;
+          line-height: 1.15;
         }
 
-        .logo-brand {
-          font-size: 1.5rem;
+        .logo-name {
+          font-size: 1.15rem;
           font-weight: 700;
-          color: #1a1a1a;
+          color: #fff;
           letter-spacing: -0.02em;
         }
 
-        .logo-brand-accent {
-          color: #0c51e6;
+        .logo-accent {
+          color: #F97316;
         }
 
-        /* Search Bar */
-        .search-container {
-          width: 100%;
-          max-width: 600px;
-          position: relative;
+        .logo-tagline {
+          font-size: 0.62rem;
+          font-weight: 400;
+          color: rgba(255,255,255,0.5);
+          letter-spacing: 0.03em;
+          text-transform: uppercase;
+        }
+
+        /* ── Search (Amazon-style) ── */
+        .search-wrap {
+          flex: 1;
           display: flex;
           align-items: center;
-          justify-self: center;
-          transition: all 0.3s ease;
-        }
-
-        .search-container.focused {
-          transform: translateY(-1px);
-        }
-
-        .search-input {
-          width: 100%;
-          padding: 0.875rem 1.25rem;
-          padding-right: 4rem;
-          border: 2px solid #e8e8e8;
-          border-radius: 12px;
-          font-size: 0.95rem;
-          font-family: 'Sora', sans-serif;
-          transition: all 0.3s ease;
-          background: #fafafa;
-          color: #333;
-        }
-
-        .search-input:focus {
-          outline: none;
-          border-color: #2563eb;
-          background: white;
-          box-shadow: 0 4px 20px rgba(37, 99, 235, 0.1);
-        }
-
-        .search-input::placeholder {
-          color: #999;
-        }
-
-        .search-button {
-          position: absolute;
-          right: 6px;
-          width: 44px;
-          height: 44px;
-          background: linear-gradient(135deg, #2563eb 0%, #2144a5 100%);
-          border: none;
-          border-radius: 10px;
-          color: white;
-          cursor: pointer;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          transition: all 0.3s ease;
-          box-shadow: 0 2px 8px rgba(37, 99, 235, 0.3);
-        }
-
-        .search-button:hover {
-          transform: scale(1.05);
-          box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4);
-        }
-
-        .search-button:active {
-          transform: scale(0.98);
-        }
-
-        /* Action Icons */
-        .navbar-actions {
-          display: flex;
-          align-items: center;
-          gap: 0.75rem;
-          flex-shrink: 0;
-        }
-
-        .icon-button {
-          position: relative;
-          width: 40px;
+          background: #fff;
+          border: 2px solid transparent;
+          border-radius: 6px;
+          padding: 0 0 0 0.85rem;
+          transition: border-color 0.15s;
           height: 40px;
-          background: transparent;
+          overflow: hidden;
+        }
+
+        .search-wrap.active {
+          border-color: #F97316;
+        }
+
+        .search-wrap input {
+          flex: 1;
           border: none;
-          border-radius: 8px;
-          color: #555;
+          background: transparent;
+          font-size: 0.88rem;
+          font-family: inherit;
+          color: #1e293b;
+          outline: none;
+          min-width: 0;
+          height: 100%;
+        }
+
+        .search-wrap input::placeholder {
+          color: #94a3b8;
+        }
+
+        .search-clear {
+          background: none;
+          border: none;
+          color: #94a3b8;
           cursor: pointer;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          transition: all 0.2s ease;
+          font-size: 0.75rem;
+          padding: 0.2rem 0.5rem;
+          line-height: 1;
           flex-shrink: 0;
         }
 
-        .icon-button:hover {
-          background: transparent;
-          color: #2563eb;
-          transform: scale(1.3);
+        .search-clear:hover {
+          color: #475569;
         }
 
-        .badge {
-          position: absolute;
-          top: -6px;
-          right: -6px;
-          background: linear-gradient(135deg, rgb(235, 37, 37) 0%, #d8073b 100%);
-          color: white;
-          font-size: 0.7rem;
-          font-weight: 700;
-          width: 20px;
-          height: 20px;
-          border-radius: 50%;
+        .search-btn {
+          background: #F97316;
+          color: #fff;
+          border: none;
+          border-radius: 0 4px 4px 0;
+          padding: 0 1rem;
+          height: 100%;
+          cursor: pointer;
+          flex-shrink: 0;
+          transition: background 0.15s;
           display: flex;
           align-items: center;
           justify-content: center;
-          box-shadow: 0 2px 8px rgba(37, 99, 235, 0.4);
         }
 
-        .sign-in-button {
+        .search-btn:hover {
+          background: #ea580c;
+        }
+
+        /* ── Actions ── */
+        .nav-actions {
           display: flex;
           align-items: center;
-          gap: 0.5rem;
-          padding: 0.75rem 1.5rem;
-          background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
-          color: white;
+          gap: 0.15rem;
+          flex-shrink: 0;
+        }
+
+        .action-btn {
+          position: relative;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 0.1rem;
+          padding: 0.35rem 0.7rem;
+          background: transparent;
           border: none;
-          border-radius: 10px;
-          font-size: 0.95rem;
-          font-weight: 600;
-          font-family: 'Sora', sans-serif;
+          border-radius: 6px;
+          color: rgba(255,255,255,0.8);
           cursor: pointer;
-          transition: all 0.3s ease;
-          box-shadow: 0 4px 15px rgba(37, 99, 235, 0.3);
+          transition: color 0.15s, background 0.15s;
+          font-family: inherit;
         }
 
-        .sign-in-button:hover {
-          transform: translateY(-2px);
-          box-shadow: 0 6px 20px rgba(37, 99, 235, 0.4);
+        .action-btn:hover {
+          background: rgba(255,255,255,0.08);
+          color: #fff;
         }
 
-        .sign-in-button:active {
-          transform: translateY(0);
+        .action-label {
+          font-size: 0.65rem;
+          font-weight: 500;
+          color: inherit;
+          line-height: 1;
         }
 
-        /* Navigation Links */
-        .navbar-links {
+        .action-badge {
+          position: absolute;
+          top: 0;
+          right: 4px;
+          background: #F97316;
+          color: #fff;
+          font-size: 0.58rem;
+          font-weight: 700;
+          min-width: 16px;
+          height: 16px;
+          border-radius: 50px;
           display: flex;
           align-items: center;
-          gap: 0;
-          padding: 0 2.5rem 1rem;
+          justify-content: center;
+          padding: 0 3px;
+          border: 1.5px solid #232F3E;
+        }
+
+        .divider {
+          width: 1px;
+          height: 26px;
+          background: rgba(255,255,255,0.15);
+          margin: 0 0.4rem;
+          flex-shrink: 0;
+        }
+
+        .signin-btn {
+          display: flex;
+          align-items: center;
+          gap: 0.35rem;
+          padding: 0.45rem 0.9rem;
+          background: transparent;
+          color: rgba(255,255,255,0.85);
+          border: 1px solid rgba(255,255,255,0.2);
+          border-radius: 6px;
+          font-size: 0.82rem;
+          font-weight: 500;
+          font-family: inherit;
+          cursor: pointer;
+          transition: color 0.15s, border-color 0.15s, background 0.15s;
+          white-space: nowrap;
+        }
+
+        .signin-btn:hover {
+          border-color: rgba(255,255,255,0.4);
+          color: #fff;
+          background: rgba(255,255,255,0.06);
+        }
+
+        /* ── Category Strip ── */
+        .nav-strip {
+          background: #37475A;
+        }
+
+        .nav-strip-inner {
+          display: flex;
+          align-items: center;
+          padding: 0 2rem;
           overflow-x: auto;
           scrollbar-width: none;
+          gap: 0;
         }
 
-        .navbar-links::-webkit-scrollbar {
+        .nav-strip-inner::-webkit-scrollbar {
           display: none;
         }
 
         .nav-link {
-          padding: 0.625rem 1rem;
-          color: #666;
-          text-decoration: none;
-          font-size: 0.9rem;
-          font-weight: 500;
-          white-space: nowrap;
-          border-radius: 8px;
-          transition: all 0.3s ease;
           position: relative;
+          padding: 0.55rem 0.9rem;
+          color: rgba(255,255,255,0.8);
+          text-decoration: none;
+          font-size: 0.82rem;
+          font-weight: 400;
+          white-space: nowrap;
+          transition: color 0.15s;
         }
 
-        .nav-link::before {
+        .nav-link::after {
           content: '';
           position: absolute;
-          bottom: -1rem;
+          bottom: 0;
           left: 50%;
           transform: translateX(-50%) scaleX(0);
-          width: 30px;
-          height: 3px;
-          background: linear-gradient(90deg, #2563eb 0%, #1d4ed8 100%);
-          border-radius: 2px;
-          transition: transform 0.3s ease;
+          width: 80%;
+          height: 2px;
+          background: #F97316;
+          transition: transform 0.15s ease;
         }
 
         .nav-link:hover {
-          color: #2563eb;
-          background: #eff6ff;
+          color: #fff;
         }
 
-        .nav-link:hover::before {
+        .nav-link:hover::after {
           transform: translateX(-50%) scaleX(1);
         }
 
-        /* Responsive Design */
-        @media (max-width: 1200px) {
-          .navbar-top {
-            padding: 1rem 2rem;
-            gap: 2.5rem;
-          }
-          
-          .search-container {
-            max-width: 550px;
-          }
-          
-          .navbar-links {
-            padding: 0 2rem 1rem;
-          }
+        .nav-link-active {
+          color: #fff;
+          font-weight: 600;
         }
 
-        @media (max-width: 968px) {
-          .navbar-top {
-            padding: 1rem 1.5rem;
-            gap: 2rem;
-          }
-
-          .search-container {
-            max-width: 450px;
-          }
-
-          .navbar-actions {
-            gap: 0.5rem;
-          }
-
-          .icon-button {
-            width: 36px;
-            height: 36px;
-          }
-
-          .sign-in-button {
-            padding: 0.625rem 1rem;
-            font-size: 0.875rem;
-          }
-          
-          .navbar-links {
-            padding: 0 1.5rem 1rem;
-          }
+        .nav-link-active::after {
+          transform: translateX(-50%) scaleX(1);
         }
 
-        @media (max-width: 768px) {
+        /* ── Responsive ── */
+        @media (max-width: 900px) {
           .navbar-top {
-            grid-template-columns: auto 1fr auto;
-            padding: 1rem;
-            gap: 1rem;
-          }
-
-          .logo-brand {
-            font-size: 1.25rem;
-          }
-
-          .search-container {
-            max-width: none;
-          }
-
-          .navbar-links {
-            padding: 0 1rem 1rem;
-            gap: 0;
-          }
-
-          .nav-link {
-            padding: 0.5rem 0.875rem;
-            font-size: 0.85rem;
-          }
-        }
-
-        @media (max-width: 580px) {
-          .navbar-top {
-            grid-template-columns: auto 1fr;
-            grid-template-rows: auto auto;
+            padding: 0.6rem 1rem;
             gap: 0.75rem;
           }
-          
-          .logo {
-            grid-column: 1;
-            grid-row: 1;
-          }
-          
-          .navbar-actions {
-            grid-column: 2;
-            grid-row: 1;
-            justify-self: end;
-          }
-          
-          .search-container {
-            grid-column: 1 / -1;
-            grid-row: 2;
-          }
+          .logo-tagline { display: none; }
+          .action-label { display: none; }
+          .action-btn { padding: 0.4rem; }
+        }
 
-          .logo-brand {
-            display: none;
-          }
-
-          .sign-in-button span {
-            display: none;
-          }
-
-          .sign-in-button {
-            width: 36px;
-            padding: 0.625rem;
-            justify-content: center;
-          }
-          
-          .icon-button {
-            width: 34px;
-            height: 34px;
-          }
-          
-          .navbar-links {
-            padding: 0 1rem 0.75rem;
-          }
-          
-          .nav-link {
-            padding: 0.5rem 0.75rem;
-          }
+        @media (max-width: 640px) {
+          .logo-text { display: none; }
+          .search-wrap { flex: 1; }
+          .signin-btn span:not(:first-child) { display: none; }
         }
       `}</style>
-    </nav>
-  );
-};
-
-export default ElectroNestbar;  
+    </>
+  )
+}

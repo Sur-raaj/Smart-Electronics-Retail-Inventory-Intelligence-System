@@ -1,0 +1,9 @@
+{
+  "name": "smart-electronics-retail",
+  "private": true,
+  "scripts": {
+    "dev:frontend": "cd frontend && npm run dev",
+    "dev:backend": "cd backend && python manage.py runserver",
+    "install:frontend": "cd frontend && npm install"
+  }
+}

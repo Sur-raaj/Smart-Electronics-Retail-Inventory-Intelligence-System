@@ -1,196 +1,295 @@
-import { Link } from 'react-router-dom';
-import { FiFacebook, FiTwitter, FiInstagram, FiYoutube, FiMail, FiPhone, FiMapPin, FiArrowRight, FiCreditCard, FiTruck, FiShield, FiHeadphones } from 'react-icons/fi';
+import { Link } from 'react-router-dom'
+import { FiFacebook, FiTwitter, FiInstagram, FiYoutube, FiMail, FiPhone, FiMapPin, FiTruck, FiShield, FiCreditCard, FiHeadphones } from 'react-icons/fi'
 
-const Footer = () => {
-  const currentYear = new Date().getFullYear();
+const features = [
+  { icon: FiTruck, title: 'Free Shipping', desc: 'On orders over ₹5000' },
+  { icon: FiShield, title: 'Secure Payment', desc: '100% protected' },
+  { icon: FiCreditCard, title: 'Easy Returns', desc: '30-day returns' },
+  { icon: FiHeadphones, title: '24/7 Support', desc: 'Dedicated support' },
+]
 
+const quickLinks = ['Laptops', 'Smartphones', 'Audio', 'Cameras', 'Tablets', 'Wearables', 'Gaming', 'Accessories']
+const supportLinks = ['Contact Us', 'FAQ', 'Shipping Info', 'Returns & Exchanges', 'Warranty']
+const socials = [FiFacebook, FiTwitter, FiInstagram, FiYoutube]
+
+export default function Footer() {
   return (
-    <footer className="bg-gradient-to-b from-gray-900 to-gray-950 text-gray-300">
+    <footer className="footer">
       {/* Features Bar */}
-      <div className="border-b border-gray-800">
-        <div className="container mx-auto px-4 py-6 sm:py-8">
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
-            {[
-              { icon: FiTruck, title: 'Free Shipping', desc: 'On orders over $50' },
-              { icon: FiShield, title: 'Secure Payment', desc: '100% protected' },
-              { icon: FiCreditCard, title: 'Easy Returns', desc: '30-day returns' },
-              { icon: FiHeadphones, title: '24/7 Support', desc: 'Dedicated support' },
-            ].map((feature, idx) => (
-              <div key={idx} className="flex items-center space-x-3 sm:space-x-4">
-                <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-br from-primary-600/20 to-secondary-600/20 rounded-xl flex items-center justify-center flex-shrink-0">
-                  <feature.icon className="text-lg sm:text-xl text-primary-400" />
-                </div>
-                <div>
-                  <h4 className="text-white font-semibold text-xs sm:text-sm">{feature.title}</h4>
-                  <p className="text-gray-500 text-xs hidden sm:block">{feature.desc}</p>
-                </div>
-              </div>
-            ))}
+      <div className="features-bar">
+        {features.map((f, i) => (
+          <div key={i} className="feature">
+            <div className="feature-icon"><f.icon size={20} /></div>
+            <div>
+              <div className="feature-title">{f.title}</div>
+              <div className="feature-desc">{f.desc}</div>
+            </div>
           </div>
-        </div>
+        ))}
       </div>
 
-      <div className="container mx-auto px-4 py-10 sm:py-14">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8 lg:gap-12">
-          {/* Company Info */}
-          <div className="sm:col-span-2 lg:col-span-1">
-            <Link to="/" className="flex items-center space-x-2 mb-5 group">
-              <div className="w-11 h-11 bg-gradient-to-br from-primary-500 to-secondary-600 rounded-xl flex items-center justify-center shadow-lg shadow-primary-500/20 group-hover:shadow-primary-500/30 transition-all">
-                <span className="text-white font-bold text-xl">TG</span>
-              </div>
-              <div>
-                <span className="text-2xl font-bold text-white">Tech</span>
-                <span className="text-2xl font-bold text-primary-400">Gear</span>
-              </div>
+      <div className="footer-main">
+        <div className="footer-grid">
+          {/* Brand */}
+          <div className="footer-brand">
+            <Link to="/" className="footer-logo">
+              <div className="footer-logo-icon">EN</div>
+              <span className="footer-logo-text">Electro<span className="accent">Nest</span></span>
             </Link>
-            <p className="text-gray-400 mb-6 text-sm leading-relaxed">
-              Your premium destination for cutting-edge technology. We bring you the best gadgets with unmatched quality and competitive prices.
-            </p>
-            <div className="flex space-x-3">
-              {[
-                { icon: FiFacebook, href: '#', label: 'Facebook' },
-                { icon: FiTwitter, href: '#', label: 'Twitter' },
-                { icon: FiInstagram, href: '#', label: 'Instagram' },
-                { icon: FiYoutube, href: '#', label: 'YouTube' },
-              ].map((social, idx) => (
-                <a 
-                  key={idx}
-                  href={social.href} 
-                  aria-label={social.label}
-                  className="w-10 h-10 bg-gray-800 hover:bg-gradient-to-br hover:from-primary-600 hover:to-secondary-600 rounded-xl flex items-center justify-center transition-all duration-300 hover:scale-110 hover:shadow-lg"
-                >
-                  <social.icon className="text-lg" />
-                </a>
+            <p className="footer-desc">Your premium destination for cutting-edge technology and electronics at competitive prices.</p>
+            <div className="social-links">
+              {socials.map((Icon, i) => (
+                <a key={i} href="#" className="social-link"><Icon size={16} /></a>
               ))}
             </div>
           </div>
 
           {/* Quick Links */}
           <div>
-            <h3 className="text-white font-semibold text-lg mb-5 flex items-center">
-              <span className="w-1 h-5 bg-gradient-to-b from-primary-500 to-secondary-500 rounded-full mr-3"></span>
-              Quick Links
-            </h3>
-            <ul className="space-y-3">
-              {[
-                { name: 'All Products', path: '/products' },
-                { name: 'Laptops', path: '/products?category=Laptops' },
-                { name: 'SmartPhones', path: '/products?category=Phones' },
-                { name: 'Tablets', path: '/products?category=Tablets' },
-                { name: 'Cameras', path: '/products?category=Cameras' },
-                { name: 'Audio', path: '/products?category=Audio' },
-                { name: 'Smart Home', path: '/products?category=Smart Home' },
-                { name: 'Drones', path: '/products?category=Drones' },
-                { name: 'Headphones', path: '/products?category=Headphones' },
-                { name: 'Gaming Gear', path: '/products?category=Gaming Gear' },
-                { name: 'Accessories', path: '/products?category=Accessories' },
-              ].map((link, idx) => (
-                <li key={idx}>
-                  <Link 
-                    to={link.path} 
-                    className="text-gray-400 hover:text-primary-400 transition-colors text-sm flex items-center group"
-                  >
-                    <FiArrowRight className="mr-2 text-xs opacity-0 -ml-4 group-hover:opacity-100 group-hover:ml-0 transition-all duration-200" />
-                    {link.name}
-                  </Link>
-                </li>
+            <h3 className="footer-heading">Quick Links</h3>
+            <ul className="footer-list">
+              {quickLinks.map((link) => (
+                <li key={link}><a href="#">{link}</a></li>
               ))}
             </ul>
           </div>
 
-          {/* Customer Service */}
+          {/* Support */}
           <div>
-            <h3 className="text-white font-semibold text-lg mb-5 flex items-center">
-              <span className="w-1 h-5 bg-gradient-to-b from-primary-500 to-secondary-500 rounded-full mr-3"></span>
-              Customer Service
-            </h3>
-            <ul className="space-y-3">
-              {[
-                { name: 'Contact Us', path: '/contact' },
-                { name: 'FAQ', path: '/faq' },
-                { name: 'Shipping Info', path: '/shipping' },
-                { name: 'Returns & Exchanges', path: '/returns' },
-                { name: 'Warranty', path: '/warranty' },
-              ].map((link, idx) => (
-                <li key={idx}>
-                  <Link 
-                    to={link.path} 
-                    className="text-gray-400 hover:text-primary-400 transition-colors text-sm flex items-center group"
-                  >
-                    <FiArrowRight className="mr-2 text-xs opacity-0 -ml-4 group-hover:opacity-100 group-hover:ml-0 transition-all duration-200" />
-                    {link.name}
-                  </Link>
-                </li>
+            <h3 className="footer-heading">Support</h3>
+            <ul className="footer-list">
+              {supportLinks.map((link) => (
+                <li key={link}><a href="#">{link}</a></li>
               ))}
             </ul>
           </div>
 
-          {/* Contact Info & Newsletter */}
+          {/* Contact */}
           <div>
-            <h3 className="text-white font-semibold text-lg mb-5 flex items-center">
-              <span className="w-1 h-5 bg-gradient-to-b from-primary-500 to-secondary-500 rounded-full mr-3"></span>
-              Get In Touch
-            </h3>
-            <ul className="space-y-4 mb-6">
-              <li className="flex items-start space-x-3">
-                <div className="w-8 h-8 bg-gray-800 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5">
-                  <FiMapPin className="text-primary-400 text-sm" />
-                </div>
-                <span className="text-gray-400 text-sm">123 Tech Street, Digital City, TC 12345</span>
-              </li>
-              <li className="flex items-center space-x-3">
-                <div className="w-8 h-8 bg-gray-800 rounded-lg flex items-center justify-center flex-shrink-0">
-                  <FiPhone className="text-primary-400 text-sm" />
-                </div>
-                <a href="tel:+15551234567" className="text-gray-400 text-sm hover:text-primary-400 transition-colors">+1 (555) 123-4567</a>
-              </li>
-              <li className="flex items-center space-x-3">
-                <div className="w-8 h-8 bg-gray-800 rounded-lg flex items-center justify-center flex-shrink-0">
-                  <FiMail className="text-primary-400 text-sm" />
-                </div>
-                <a href="mailto:support@techgear.com" className="text-gray-400 text-sm hover:text-primary-400 transition-colors">support@techgear.com</a>
-              </li>
+            <h3 className="footer-heading">Contact</h3>
+            <ul className="footer-list contact-list">
+              <li><FiMapPin size={14} /> 123 Tech Street, Digital City</li>
+              <li><FiPhone size={14} /> +1 (555) 123-4567</li>
+              <li><FiMail size={14} /> support@electronest.com</li>
             </ul>
-
-            {/* Newsletter Mini */}
-            <div className="bg-gray-800/50 rounded-xl p-4">
-              <h4 className="text-white text-sm font-medium mb-2">Subscribe to Newsletter</h4>
-              <div className="flex">
-                <input 
-                  type="email" 
-                  placeholder="Your email" 
-                  className="flex-1 px-3 py-2 bg-gray-900 border border-gray-700 rounded-l-lg text-sm focus:outline-none focus:border-primary-500 transition-colors"
-                />
-                <button className="px-4 py-2 bg-gradient-to-r from-primary-600 to-primary-700 text-white rounded-r-lg hover:from-primary-700 hover:to-primary-800 transition-all">
-                  <FiArrowRight />
-                </button>
-              </div>
-            </div>
           </div>
         </div>
 
-        {/* Bottom Bar */}
-        <div className="border-t border-gray-800 mt-10 pt-8">
-          <div className="flex flex-col sm:flex-row justify-between items-center space-y-4 sm:space-y-0">
-            <p className="text-gray-500 text-sm text-center sm:text-left">
-              © {currentYear} TechGear. All rights reserved. Crafted with ❤️
-            </p>
-            <div className="flex flex-wrap justify-center gap-4 sm:gap-6">
-              <Link to="/privacy" className="text-gray-500 hover:text-primary-400 text-sm transition-colors">
-                Privacy Policy
-              </Link>
-              <Link to="/terms" className="text-gray-500 hover:text-primary-400 text-sm transition-colors">
-                Terms of Service
-              </Link>
-              <Link to="/cookies" className="text-gray-500 hover:text-primary-400 text-sm transition-colors">
-                Cookie Policy
-              </Link>
-            </div>
+        <div className="footer-bottom">
+          <p>© {new Date().getFullYear()} ElectroNest. All rights reserved.</p>
+          <div className="footer-bottom-links">
+            <a href="#">Privacy Policy</a>
+            <a href="#">Terms of Service</a>
           </div>
         </div>
       </div>
-    </footer>
-  );
-};
 
-export default Footer;
+      <style>{`
+        .footer {
+          font-family: 'Inter', system-ui, sans-serif;
+          background: #232F3E;
+          color: rgba(255,255,255,0.6);
+        }
+
+        .features-bar {
+          display: grid;
+          grid-template-columns: repeat(4, 1fr);
+          gap: 2rem;
+          padding: 1.5rem 2.5rem;
+          background: #37475A;
+        }
+
+        .feature {
+          display: flex;
+          align-items: center;
+          gap: 1rem;
+        }
+
+        .feature-icon {
+          width: 44px;
+          height: 44px;
+          background: rgba(255,255,255,0.08);
+          color: #F97316;
+          border-radius: 10px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          flex-shrink: 0;
+        }
+
+        .feature-title {
+          color: #fff;
+          font-weight: 600;
+          font-size: 0.88rem;
+        }
+
+        .feature-desc {
+          font-size: 0.78rem;
+          color: rgba(255,255,255,0.45);
+          margin-top: 0.1rem;
+        }
+
+        .footer-main {
+          padding: 2.5rem 2.5rem 2rem;
+        }
+
+        .footer-grid {
+          display: grid;
+          grid-template-columns: 1.5fr 1fr 1fr 1fr;
+          gap: 3rem;
+          margin-bottom: 2.5rem;
+        }
+
+        .footer-logo {
+          display: flex;
+          align-items: center;
+          gap: 0.6rem;
+          text-decoration: none;
+          margin-bottom: 1rem;
+        }
+
+        .footer-logo-icon {
+          width: 36px;
+          height: 36px;
+          background: #F97316;
+          border-radius: 8px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: white;
+          font-weight: 700;
+          font-size: 0.85rem;
+        }
+
+        .footer-logo-text {
+          font-size: 1.25rem;
+          font-weight: 700;
+          color: #fff;
+        }
+
+        .footer-logo-text .accent {
+          color: #F97316;
+        }
+
+        .footer-desc {
+          font-size: 0.88rem;
+          line-height: 1.6;
+          margin-bottom: 1.25rem;
+        }
+
+        .social-links {
+          display: flex;
+          align-items: center;
+          gap: 0.6rem;
+        }
+
+        .social-link {
+          width: 36px;
+          height: 36px;
+          background: rgba(255,255,255,0.06);
+          border: 1px solid rgba(255,255,255,0.1);
+          border-radius: 8px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: rgba(255,255,255,0.5);
+          text-decoration: none;
+          transition: all 0.2s;
+        }
+
+        .social-link:hover {
+          background: rgba(255,255,255,0.1);
+          color: #fff;
+        }
+
+        .footer-heading {
+          color: #fff;
+          font-size: 0.95rem;
+          font-weight: 600;
+          margin-bottom: 1rem;
+        }
+
+        .footer-list {
+          list-style: none;
+          padding: 0;
+          margin: 0;
+        }
+
+        .footer-list li {
+          margin-bottom: 0.6rem;
+        }
+
+        .footer-list a {
+          color: rgba(255,255,255,0.55);
+          text-decoration: none;
+          font-size: 0.88rem;
+          transition: color 0.15s;
+        }
+
+        .footer-list a:hover {
+          color: #F97316;
+        }
+
+        .contact-list li {
+          display: flex;
+          align-items: center;
+          gap: 0.6rem;
+          font-size: 0.88rem;
+        }
+
+        .footer-bottom {
+          border-top: 1px solid rgba(255,255,255,0.08);
+          padding-top: 1.5rem;
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          font-size: 0.82rem;
+          color: rgba(255,255,255,0.35);
+        }
+
+        .footer-bottom-links {
+          display: flex;
+          gap: 1.25rem;
+        }
+
+        .footer-bottom-links a {
+          color: rgba(255,255,255,0.35);
+          text-decoration: none;
+          transition: color 0.15s;
+        }
+
+        .footer-bottom-links a:hover {
+          color: rgba(255,255,255,0.7);
+        }
+
+        @media (max-width: 768px) {
+          .features-bar {
+            grid-template-columns: repeat(2, 1fr);
+            padding: 1.25rem 1rem;
+          }
+          .footer-grid {
+            grid-template-columns: 1fr 1fr;
+            gap: 2rem;
+          }
+          .footer-brand {
+            grid-column: 1 / -1;
+          }
+          .footer-bottom {
+            flex-direction: column;
+            gap: 0.75rem;
+            text-align: center;
+          }
+        }
+
+        @media (max-width: 480px) {
+          .features-bar {
+            grid-template-columns: 1fr;
+          }
+          .footer-grid {
+            grid-template-columns: 1fr;
+          }
+        }
+      `}</style>
+    </footer>
+  )
+}
