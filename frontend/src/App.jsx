@@ -5,6 +5,7 @@ import Navbar from './components/Common/Navbar'
 import Footer from './components/Common/Footer'
 import Home from './pages/Home'
 import Wishlist from './pages/Customer/Wishlist'
+import Cart from './pages/Customer/Cart'
 
 function ScrollToTop() {
   const { pathname } = useLocation()
@@ -25,6 +26,7 @@ export default function App() {
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/wishlist" element={<Wishlist />} />
+          <Route path="/cart" element={<Cart />} />
         </Routes>
       </main>
       <Footer />
