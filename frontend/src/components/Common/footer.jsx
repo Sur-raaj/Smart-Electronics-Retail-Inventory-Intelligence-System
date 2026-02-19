@@ -68,8 +68,8 @@ export default function Footer() {
           <div>
             <h3 className="footer-heading">Contact</h3>
             <ul className="footer-list contact-list">
-              <li><FiMapPin size={14} /> 123 Tech Street, Digital City</li>
-              <li><FiPhone size={14} /> +1 (555) 123-4567</li>
+              <li><FiMapPin size={14} /> Sankhamul, KTM City</li>
+              <li><FiPhone size={14} /> +977 9869465432</li>
               <li><FiMail size={14} /> support@electronest.com</li>
             </ul>
           </div>

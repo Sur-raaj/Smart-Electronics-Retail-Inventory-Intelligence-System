@@ -1,19 +1,24 @@
 import { useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
-import { FiSearch, FiHeart, FiShoppingCart, FiUser, FiChevronDown } from 'react-icons/fi'
+import { FiSearch, FiHeart, FiShoppingCart, FiUser, FiChevronDown, FiBarChart2 } from 'react-icons/fi'
 
 const navItems = [
+  { label: 'Home', path: '/' },
   { label: 'Laptops', path: '/products?cat=Laptops' },
   { label: 'Smartphones', path: '/products?cat=Smartphones' },
-  { label: 'Audio', path: '/products?cat=Audio' },
+  {label : 'Gaming', path: '/products?cat=Gaming'},
+  {label : 'Tablets', path: '/products?cat=Tablets'},
+  { label: 'Smart Home', path: '/products?cat=Smart Home' },
+  { label: 'Headphones', path: '/products?cat=Headphones' },
+  {label : 'Display', path: '/products?cat=Display'},
   { label: 'Cameras', path: '/products?cat=Cameras' },
-  { label: 'Gaming', path: '/products?cat=Gaming' },
-  { label: 'Tablets', path: '/products?cat=Tablets' },
-  { label: 'Wearables', path: '/products?cat=Wearables' },
+  {label : 'Drones', path: '/products?cat=Drones'},
+  {label : 'Smart Watches', path: '/products?cat=Smart Watches'},
+  {label : 'Speakers', path: '/products?cat=Speakers'},
   { label: 'Accessories', path: '/products?cat=Accessories' },
 ]
 
-export default function Navbar({ cartCount = 0, wishlistCount = 0 , user = null}) {
+export default function Navbar({ cartCount = 0, wishlistCount = 0, compareCount = 0, user = null}) {
   const [searchFocused, setSearchFocused] = useState(false)
   const [searchVal, setSearchVal] = useState('')
   const location = useLocation()
@@ -58,6 +63,11 @@ export default function Navbar({ cartCount = 0, wishlistCount = 0 , user = null}
 
           {/* Actions */}
           <div className="nav-actions">
+            <Link to="/compare" className="action-btn" aria-label="Compare">
+              <FiBarChart2 size={20} />
+              <span className="action-label">Compare</span>
+              {compareCount > 0 && <span className="action-badge">{compareCount}</span>}
+            </Link>
             <Link to="/wishlist" className="action-btn" aria-label="Wishlist">
               <FiHeart size={20} />
               <span className="action-label">Wishlist</span>

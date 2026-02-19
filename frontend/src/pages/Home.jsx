@@ -1,24 +1,108 @@
-import { FiMonitor, FiSmartphone, FiHeadphones, FiCamera, FiCpu, FiWatch, FiHeart } from 'react-icons/fi'
+import { Link } from 'react-router-dom'
+import { FiMonitor, FiSmartphone, FiCamera, FiWatch, FiHeart, FiBarChart2, } from 'react-icons/fi'
+import {MdOutlineHomeWork} from 'react-icons/md'
+import { Gamepad2, TabletSmartphone,Cable } from 'lucide-react'
+import { GiDeliveryDrone } from "react-icons/gi";
+import { BsDisplay,BsLaptopFill,BsSpeaker } from "react-icons/bs";
+import { ImHeadphones } from "react-icons/im";
 
 const categories = [
-    { name: 'Laptops', icon: FiMonitor },
     { name: 'Smartphones', icon: FiSmartphone },
-    { name: 'Audio', icon: FiHeadphones },
+    { name: 'Laptops', icon: BsLaptopFill },
+    { name: 'Gaming', icon: Gamepad2},
+    { name: 'Tablets', icon: TabletSmartphone},
+    { name: 'Smart Home', icon: MdOutlineHomeWork},
+    { name: 'Headphones', icon: ImHeadphones },
+    { name: 'Display', icon: BsDisplay },
     { name: 'Cameras', icon: FiCamera },
-    { name: 'Components', icon: FiCpu },
-    { name: 'Wearables', icon: FiWatch },
+    { name: 'Drones', icon:GiDeliveryDrone },
+    { name: 'Smart Watches', icon: FiWatch },
+    { name: 'Speakers', icon: BsSpeaker },
+    { name: 'Accessories', icon: Cable},
 ]
 
 const featuredProducts = [
-    { id: 1, name: 'MacBook Pro 16"', category: 'Laptops', price: 2499, oldPrice: 2799, image: 'https://images.unsplash.com/photo-1517336714731-489689fd1ca8?auto=format&fit=crop&w=800&q=80', rating: 4.8 },
-    { id: 2, name: 'iPhone 15 Pro Max', category: 'Smartphones', price: 1199, oldPrice: 1299, image: 'https://images.unsplash.com/photo-1695048133142-1a20484d2569?auto=format&fit=crop&w=800&q=80', rating: 4.9 },
-    { id: 3, name: 'Sony WH-1000XM5', category: 'Audio', price: 349, oldPrice: 399, image: 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&w=800&q=80', rating: 4.7 },
-    { id: 4, name: 'Canon EOS R6 Mark II', category: 'Cameras', price: 2499, oldPrice: 2699, image: 'https://images.unsplash.com/photo-1516035069371-29a1b244cc32?auto=format&fit=crop&w=800&q=80', rating: 4.8 },
-    { id: 5, name: 'Samsung Galaxy Tab S9', category: 'Tablets', price: 799, oldPrice: 899, image: 'https://images.unsplash.com/photo-1542751110-97427bbecf20?auto=format&fit=crop&w=800&q=80', rating: 4.6 },
-    { id: 6, name: 'Apple Watch Ultra 2', category: 'Wearables', price: 799, oldPrice: 849, image: 'https://images.unsplash.com/photo-1579586337278-3f436f25d4d6?auto=format&fit=crop&w=800&q=80', rating: 4.8 },
+    { 
+        id: 1, 
+        name: 'MacBook Pro 16"', 
+        category: 'Laptops', 
+        price: 2499, 
+        oldPrice: 2799, 
+        image: 'https://images.unsplash.com/photo-1517336714731-489689fd1ca8?auto=format&fit=crop&w=800&q=80', 
+        rating: 4.8,
+        performance: "M3 Pro chip, 12-core CPU",
+        memory: "18GB Unified, 512GB SSD",
+        display: "16.2″ Liquid Retina XDR, 120Hz",
+        warranty: "1 Year AppleCare"
+    },
+    { 
+        id: 2, 
+        name: 'iPhone 15 Pro Max', 
+        category: 'Smartphones', 
+        price: 1199, 
+        oldPrice: 1299, 
+        image: 'https://images.unsplash.com/photo-1695048133142-1a20484d2569?auto=format&fit=crop&w=800&q=80', 
+        rating: 4.9,
+        performance: "A17 Pro chip, 6-core GPU",
+        memory: "8GB RAM, 256GB Storage",
+        display: "6.7″ Super Retina XDR, 120Hz",
+        warranty: "1 Year AppleCare"
+    },
+    { 
+        id: 3, 
+        name: 'Sony WH-1000XM5', 
+        category: 'Headphones', 
+        price: 349, 
+        oldPrice: 399, 
+        image: 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&w=800&q=80', 
+        rating: 4.7,
+        performance: "Integrated V1, QN1 Processor",
+        memory: "N/A",
+        display: "N/A",
+        warranty: "1 Year Sony Warranty"
+    },
+    { 
+        id: 4, 
+        name: 'Canon EOS R6 Mark II', 
+        category: 'Cameras', 
+        price: 2499, 
+        oldPrice: 2699, 
+        image: 'https://images.unsplash.com/photo-1516035069371-29a1b244cc32?auto=format&fit=crop&w=800&q=80', 
+        rating: 4.8,
+        performance: "DIGIC X Image Processor",
+        memory: "Dual SD Card Slots",
+        display: "3.0″ Vari-Angle Touchscreen",
+        warranty: "2 Years Canon Warranty"
+    },
+    { 
+        id: 5, 
+        name: 'Samsung Galaxy Tab S9', 
+        category: 'Tablets', 
+        price: 799, 
+        oldPrice: 899, 
+        image: 'https://images.unsplash.com/photo-1542751110-97427bbecf20?auto=format&fit=crop&w=800&q=80', 
+        rating: 4.6,
+        performance: "Snapdragon 8 Gen 2",
+        memory: "8GB RAM, 128GB Storage",
+        display: "11″ Dynamic AMOLED 2X, 120Hz",
+        warranty: "1 Year Samsung Warranty"
+    },
+    { 
+        id: 6, 
+        name: 'Apple Watch Ultra 2', 
+        category: 'Wearables', 
+        price: 799, 
+        oldPrice: 849, 
+        image: 'https://images.unsplash.com/photo-1579586337278-3f436f25d4d6?auto=format&fit=crop&w=800&q=80', 
+        rating: 4.8,
+        performance: "S9 SiP, 4-core Neural Engine",
+        memory: "64GB Capacity",
+        display: "Always-On Retina OLED, 3000 nits",
+        warranty: "1 Year AppleCare"
+    },
 ]
 
-export default function Home({ addToCart, toggleWishlist, wishlistItems = [] }) {
+export default function Home({ addToCart, toggleWishlist, wishlistItems = [], toggleCompare, compareItems = [] }) {
     return (
         <div className="home">
             {/* Hero Section */}
@@ -59,20 +143,35 @@ export default function Home({ addToCart, toggleWishlist, wishlistItems = [] }) 
                 <div className="products-grid">
                     {featuredProducts.map((product) => {
                         const isInWishlist = wishlistItems.some(item => item.id === product.id);
+                        const isInCompare = compareItems.some(item => item.id === product.id);
                         return (
                             <div key={product.id} className="product-card group">
                                 <div className="product-image-wrap">
-                                    <img src={product.image} alt={product.name} className="product-img" />
-                                    <button 
-                                        className={`wishlist-btn ${isInWishlist ? 'active' : ''}`}
-                                        onClick={() => toggleWishlist(product)}
-                                    >
-                                        <FiHeart size={20} className={isInWishlist ? "fill-current" : ""} />
-                                    </button>
+                                    <Link to={`/product/${product.id}`} style={{ display: 'block', height: '100%' }}>
+                                        <img src={product.image} alt={product.name} className="product-img" />
+                                    </Link>
+                                    <div className="product-actions">
+                                        <button 
+                                          className={`product-action-btn product-wishlist-btn ${isInWishlist ? 'active' : ''}`}
+                                            onClick={() => toggleWishlist(product)}
+                                            title={isInWishlist ? "Remove from wishlist" : "Add to wishlist"}
+                                        >
+                                            <FiHeart size={18} className={isInWishlist ? "fill-current" : ""} />
+                                        </button>
+                                        <button 
+                                          className={`product-action-btn product-compare-btn ${isInCompare ? 'active' : ''}`}
+                                            onClick={() => toggleCompare(product)}
+                                            title={isInCompare ? "Remove from compare" : "Add to compare"}
+                                        >
+                                            <FiBarChart2 size={18} className={isInCompare ? "fill-current" : ""} />
+                                        </button>
+                                    </div>
                                 </div>
                                 <div className="product-info">
                                     <span className="product-category">{product.category}</span>
-                                    <h3 className="product-name">{product.name}</h3>
+                                    <Link to={`/product/${product.id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
+                                        <h3 className="product-name">{product.name}</h3>
+                                    </Link>
                                     <div className="product-pricing">
                                         <span className="product-price">${product.price}</span>
                                         <span className="product-old-price">${product.oldPrice}</span>
@@ -294,39 +393,62 @@ export default function Home({ addToCart, toggleWishlist, wishlistItems = [] }) 
           transform: scale(1.05);
         }
 
-        .wishlist-btn {
+        .product-actions {
           position: absolute;
           top: 10px;
           right: 10px;
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+          z-index: 2;
+        }
+
+        .product-action-btn {
           background: white;
           border: none;
           border-radius: 50%;
-          width: 32px;
-          height: 32px;
+          width: 36px;
+          height: 36px;
           display: flex;
           align-items: center;
           justify-content: center;
           cursor: pointer;
           opacity: 0;
-          transform: translateY(-5px);
-          transition: all 0.2s;
-          color: #9ca3af;
-          box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+          transform: translateX(10px);
+          transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+          color: #64748b;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+          text-decoration: none;
         }
 
-        .product-card:hover .wishlist-btn {
+        .product-card:hover .product-action-btn {
           opacity: 1;
-          transform: translateY(0);
+          transform: translateX(0);
         }
 
-        .wishlist-btn:hover {
-          color: #ef4444;
-          transform: scale(1.1);
+        .product-card:hover .product-action-btn:nth-child(1) { transition-delay: 0ms; }
+        .product-card:hover .product-action-btn:nth-child(2) { transition-delay: 50ms; }
+
+        .product-action-btn:hover {
+          background: #F97316;
+          color: white;
         }
 
-        .wishlist-btn.active {
-          opacity: 1;
+        .product-action-btn.active {
           color: #ef4444;
+        }
+        .product-action-btn.active:hover {
+          background: #ef4444;
+          color: white;
+        }
+
+        .product-compare-btn.active {
+          background: #F97316;
+          color: white;
+        }
+        .product-compare-btn.active:hover {
+          background: #ea580c;
+          color: white;
         }
 
         .product-info {
@@ -373,11 +495,9 @@ export default function Home({ addToCart, toggleWishlist, wishlistItems = [] }) 
           .hero {
             padding: 2.5rem 1.25rem;
           }
-          .categories-grid {
-            grid-template-columns: repeat(3, 1fr);
-          }
           .products-grid {
             grid-template-columns: repeat(2, 1fr);
+            gap: 1rem;
           }
         }
       `}</style>

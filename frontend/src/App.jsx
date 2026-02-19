@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { Routes, Route, useLocation } from 'react-router-dom'
+import { Routes, Route, useLocation, Link } from 'react-router-dom'
+import { X } from 'lucide-react'
 import './App.css'
 import Navbar from './components/Common/Navbar'
 import Footer from './components/Common/Footer'
@@ -8,6 +9,7 @@ import Wishlist from './pages/Customer/Wishlist'
 import Cart from './pages/Customer/Cart'
 import Login from './pages/Customer/Login'
 import Checkout from './pages/Customer/Checkout'
+import Compare from './pages/Customer/Compare'
 
 function ScrollToTop() {
   const { pathname } = useLocation()
@@ -24,6 +26,20 @@ export default function App() {
   const [wishlistItems, setWishlistItems] = useState([])
   const [checkoutSelection, setCheckoutSelection] = useState([])
   const [pendingWishlistCheckoutIds, setPendingWishlistCheckoutIds] = useState([])
+  const [compareItems, setCompareItems] = useState([])
+  const [toasts, setToasts] = useState([])
+
+  const addToast = (data) => {
+    const id = Date.now()
+    setToasts(prev => [...prev, { id, ...data }])
+    setTimeout(() => {
+      setToasts(prev => prev.filter(t => t.id !== id))
+    }, 3000)
+  }
+
+  const removeToast = (id) => {
+    setToasts(prev => prev.filter(t => t.id !== id))
+  }
 
   const addToCart = (product) => {
     setCartItems(prev => {
@@ -109,20 +125,160 @@ export default function App() {
     setPendingWishlistCheckoutIds([])
   }
 
+  const toggleCompare = (product) => {
+    const exists = compareItems.find(item => item.id === product.id)
+
+    if (exists) {
+      setCompareItems(prev => prev.filter(item => item.id !== product.id))
+      addToast({ type: 'remove', product })
+    } else {
+      if (compareItems.length >= 3) {
+        addToast({ type: 'warning', message: "You can compare up to 3 products only." })
+      } else {
+        setCompareItems(prev => [...prev, { ...product, rating: product.rating || 4.5, inStock: true }])
+        addToast({ type: 'add', product })
+      }
+    }
+  }
+
+  const removeFromCompare = (id) => {
+    setCompareItems(prev => prev.filter(item => item.id !== id))
+  }
+
   return (
     <div className="App">
       <ScrollToTop />
-      <Navbar cartCount={cartItems.reduce((acc, item) => acc + item.quantity, 0)} wishlistCount={wishlistItems.length} />
+      <Navbar cartCount={cartItems.reduce((acc, item) => acc + item.quantity, 0)} wishlistCount={wishlistItems.length} compareCount={compareItems.length} />
       <main className="main-content">
         <Routes>
-          <Route path="/" element={<Home addToCart={addToCart} toggleWishlist={toggleWishlist} wishlistItems={wishlistItems} />} />
+          <Route path="/" element={<Home addToCart={addToCart} toggleWishlist={toggleWishlist} wishlistItems={wishlistItems} toggleCompare={toggleCompare} compareItems={compareItems} />} />
           <Route path="/wishlist" element={<Wishlist items={wishlistItems} removeFromWishlist={removeFromWishlist} addToCart={addToCart} clearWishlist={clearWishlist} moveAllToCart={moveAllToCart} buyNowFromWishlist={buyNowFromWishlist} />} />
           <Route path="/cart" element={<Cart cartItems={cartItems} updateCartQuantity={updateCartQuantity} removeFromCart={removeFromCart} clearCart={clearCart} checkoutSelection={checkoutSelection} setCheckoutItems={setCheckoutItems} />} />
+          <Route path="/compare" element={<Compare items={compareItems} removeFromCompare={removeFromCompare} addToCart={addToCart} />} />
           <Route path="/checkout" element={<Checkout cartItems={cartItems} selectedIds={checkoutSelection} onPaymentSuccess={removePurchasedFromCart} />} />
           <Route path="/login" element={<Login />} />
         </Routes>
       </main>
       <Footer />
+      <div className="toast-container">
+        {toasts.map(t => (
+          <div key={t.id} className="toast-message">
+            {t.type === 'warning' ? (
+              <span style={{ flex: 1, padding: '0 8px' }}>{t.message}</span>
+            ) : (
+              <>
+                <img src={t.product.image} alt="" className="toast-img" />
+                <div className="toast-info">
+                  <span className="toast-price">{new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(t.product.price)}</span>
+                  <span className="toast-desc" title={t.product.name}>{t.product.name}</span>
+                </div>
+                <span className="toast-status">
+                  {t.type === 'add' ? 'Added to comparison' : 'Removed from comparison'}
+                </span>
+                <div className="toast-actions">
+                  {t.type === 'add' && <Link to="/compare" className="toast-link">View Comparison</Link>}
+                  <button onClick={() => removeToast(t.id)} className="toast-close">
+                    <X size={16} />
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        ))}
+      </div>
+      <style>{`
+        .toast-container {
+          position: fixed;
+          bottom: 24px;
+          left: 50%;
+          transform: translateX(-50%);
+          z-index: 10000;
+          display: flex;
+          flex-direction: column;
+          gap: 10px;
+          pointer-events: none;
+        }
+        .toast-message {
+          background: linear-gradient(to right, #ffffff, #f8fafc);
+          color: #1e293b;
+          padding: 12px 16px;
+          border-radius: 12px;
+          box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+          font-size: 14px;
+          font-weight: 500;
+          animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+          border: 1px solid rgba(255,255,255,0.5);
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          min-width: fit-content;
+          pointer-events: auto;
+        }
+        .toast-info {
+          display: flex;
+          flex-direction: column;
+          gap: 2px;
+        }
+        .toast-price {
+          color: #16a34a;
+          font-weight: 700;
+          font-size: 14px;
+        }
+        .toast-desc {
+          font-size: 12px;
+          color: #64748b;
+          max-width: 140px;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+        .toast-status {
+          font-size: 13px;
+          color: #F97316;
+          font-weight: 600;
+          white-space: nowrap;
+        }
+        .toast-actions {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          margin-left: 8px;
+        }
+        .toast-link {
+          font-size: 13px;
+          color: #F97316;
+          text-decoration: none;
+          font-weight: 600;
+          white-space: nowrap;
+        }
+        .toast-img {
+          width: 48px;
+          height: 48px;
+          border-radius: 8px;
+          object-fit: cover;
+          border: 2px solid rgba(255,255,255,0.15);
+        }
+        .toast-close {
+          background: none;
+          border: none;
+          color: #94a3b8;
+          cursor: pointer;
+          padding: 4px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          border-radius: 50%;
+          transition: all 0.2s;
+        }
+        .toast-close:hover {
+          background: #f1f5f9;
+          color: #ef4444;
+        }
+        @keyframes slideUp {
+          from { opacity: 0; transform: translateY(20px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+      `}</style>
     </div>
   )
 }
