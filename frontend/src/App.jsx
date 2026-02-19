@@ -4,12 +4,14 @@ import { X } from 'lucide-react'
 import './App.css'
 import Navbar from './components/Common/Navbar'
 import Footer from './components/Common/Footer'
+import { useAuth } from './context/AuthContext'
 import Home from './pages/Home'
 import Wishlist from './pages/Customer/Wishlist'
 import Cart from './pages/Customer/Cart'
 import Login from './pages/Customer/Login'
 import Checkout from './pages/Customer/Checkout'
 import Compare from './pages/Customer/Compare'
+import Profile from './pages/Customer/Profile'
 
 function ScrollToTop() {
   const { pathname } = useLocation()
@@ -28,6 +30,7 @@ export default function App() {
   const [pendingWishlistCheckoutIds, setPendingWishlistCheckoutIds] = useState([])
   const [compareItems, setCompareItems] = useState([])
   const [toasts, setToasts] = useState([])
+  const { user } = useAuth()
 
   const addToast = (data) => {
     const id = Date.now()
@@ -148,7 +151,7 @@ export default function App() {
   return (
     <div className="App">
       <ScrollToTop />
-      <Navbar cartCount={cartItems.reduce((acc, item) => acc + item.quantity, 0)} wishlistCount={wishlistItems.length} compareCount={compareItems.length} />
+      <Navbar cartCount={cartItems.reduce((acc, item) => acc + item.quantity, 0)} wishlistCount={wishlistItems.length} compareCount={compareItems.length} user={user} />
       <main className="main-content">
         <Routes>
           <Route path="/" element={<Home addToCart={addToCart} toggleWishlist={toggleWishlist} wishlistItems={wishlistItems} toggleCompare={toggleCompare} compareItems={compareItems} />} />
@@ -157,6 +160,7 @@ export default function App() {
           <Route path="/compare" element={<Compare items={compareItems} removeFromCompare={removeFromCompare} addToCart={addToCart} />} />
           <Route path="/checkout" element={<Checkout cartItems={cartItems} selectedIds={checkoutSelection} onPaymentSuccess={removePurchasedFromCart} />} />
           <Route path="/login" element={<Login />} />
+          <Route path="/profile" element={<Profile />} />
         </Routes>
       </main>
       <Footer />

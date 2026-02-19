@@ -79,11 +79,20 @@ export default function Navbar({ cartCount = 0, wishlistCount = 0, compareCount 
               {cartCount > 0 && <span className="action-badge">{cartCount}</span>}
             </Link>
             <div className="divider" />
-           <Link to={user ? "/profile" : "/login"} className="signin-btn">
-              <FiUser size={17} />
-              <span>{user ? `Hi, ${user.name}` : "Sign In"}</span>
-              <FiChevronDown size={14} />
-            </Link>
+            {user ? (
+              <Link to="/profile" className="signin-btn">
+                <div style={{ width: 20, height: 20, borderRadius: '50%', background: '#F97316', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontSize: '0.7rem', fontWeight: 'bold' }}>
+                  {user.firstName?.charAt(0)}
+                </div>
+                <span>{user.firstName}</span>
+              </Link>
+            ) : (
+              <Link to="/login" className="signin-btn">
+                <FiUser size={17} />
+                <span>Sign In</span>
+                <FiChevronDown size={14} />
+              </Link>
+            )}
           </div>
         </div>
 

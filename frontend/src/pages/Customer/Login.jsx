@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom'; // Import useNavigate
 import { Mail, Lock, User, MapPin, ArrowRight, Phone, Calendar, Eye, EyeOff } from 'lucide-react';
+import { useAuth } from '../../context/AuthContext';
 
 export default function Login() {
   const [isLogin, setIsLogin] = useState(true);
@@ -9,6 +10,8 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [error, setError] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const { login } = useAuth();
 
   const [formData, setFormData] = useState({
     firstName: '',
@@ -29,59 +32,43 @@ export default function Login() {
     }
   }, [error]);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     
-    if (!isLogin) {
-      const { password, confirmPassword, dob, email } = formData;
-
-      // Age Validation
-      const birthDate = new Date(dob);
-      const today = new Date();
-      let age = today.getFullYear() - birthDate.getFullYear();
-      const monthDiff = today.getMonth() - birthDate.getMonth();
-      
-      if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
-        age--;
-      }
-
-      if (age < 16) {
-        setError("Date is Invalid please keep your real date");
-        return;
-      }
-
-      // Email Validation
-      const emailRegex = /^[a-zA-Z0-9._%+-]+@(gmail\.com|.*\.edu\.np)$/;
-      if (!emailRegex.test(email)) {
-        setError("! Please Use Gmail or Educational mail");
-        return;
-      }
-      
-      // Password Validation: At least 8 chars, 1 uppercase, 1 lowercase, 1 number, 1 special char
-      const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/;
-
-      if (!passwordRegex.test(password)) {
-        setError("Password must be at least 8 characters with uppercase, lowercase, number & special char.");
-        return;
-      }
-
-      if (password !== confirmPassword) {
-        setError("Password and Confirm Password do not match.");
-        return;
-      }
-    }
+    const normalizedEmail = formData.email.toLowerCase().trim();
     
-    setError(''); // Clear error if validation passes
+    setError('');
+    setIsLoading(true);
 
-    // 1. Simulate API Call / Validation
-    console.log(isLogin ? "Logging in..." : "Registering...", formData);
+    try {
+      // Use environment variable for API URL or fallback to localhost
+      const API_BASE_URL = import.meta.env?.VITE_API_URL || 'http://localhost:5000/api';
+      const endpoint = isLogin ? '/auth/login' : '/auth/signup';
 
-    // 2. Perform Redirection
-    // In a real app, you'd do this inside a .then() or after an 'await'
-    setTimeout(() => {
-      alert(isLogin ? "Login Successful!" : "Account Created!");
-      navigate('/'); // Redirect to the Home page
-    }, 500); 
+      const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(isLogin 
+          ? { email: normalizedEmail, password: formData.password }
+          : { ...formData, email: normalizedEmail }
+        ),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || (isLogin ? 'Login failed' : 'Signup failed'));
+      }
+
+      login(data.user || data);
+      navigate('/');
+    } catch (err) {
+      setError(err.message || "Failed to connect to the server.");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
 
@@ -105,7 +92,7 @@ export default function Login() {
           <p>{isLogin ? 'Enter your details to access your account' : 'Join us for a premium shopping experience'}</p>
         </div>
 
-        <form onSubmit={handleSubmit} className="login-form">
+        <form onSubmit={handleSubmit} className="login-form" autoComplete="off">
           {!isLogin && (
             <>
               <div className="name-row">
@@ -118,6 +105,7 @@ export default function Login() {
                     value={formData.firstName}
                     onChange={handleChange} 
                     required 
+                    autoComplete="off"
                   />
                 </div>
                 <div className="input-group">
@@ -129,6 +117,7 @@ export default function Login() {
                     value={formData.lastName}
                     onChange={handleChange} 
                     required 
+                    autoComplete="off"
                   />
                 </div>
               </div>
@@ -144,6 +133,7 @@ export default function Login() {
                   onChange={handleChange} 
                   className="phone-input"
                   required 
+                  autoComplete="off"
                 />
               </div>
 
@@ -179,6 +169,7 @@ export default function Login() {
               value={formData.email}
               onChange={handleChange} 
               required 
+              autoComplete={isLogin ? "username" : "off"}
             />
           </div>
 
@@ -192,6 +183,7 @@ export default function Login() {
                 value={formData.address}
                 onChange={handleChange} 
                 required 
+                autoComplete="off"
               />
             </div>
           )}
@@ -205,6 +197,7 @@ export default function Login() {
               value={formData.password}
               onChange={handleChange} 
               required 
+              autoComplete={isLogin ? "current-password" : "new-password"}
             />
             <button type="button" className="eye-btn" onClick={() => setShowPassword(!showPassword)}>
               {showPassword ? <Eye size={18} /> : <EyeOff size={18} />}
@@ -221,6 +214,7 @@ export default function Login() {
                 value={formData.confirmPassword}
                 onChange={handleChange} 
                 required 
+                autoComplete="new-password"
               />
               <button type="button" className="eye-btn" onClick={() => setShowConfirmPassword(!showConfirmPassword)}>
                 {showConfirmPassword ? <Eye size={18} /> : <EyeOff size={18} />}
@@ -228,9 +222,9 @@ export default function Login() {
             </div>
           )}
 
-          <button type="submit" className="submit-btn">
-            {isLogin ? 'Sign In' : 'Sign Up'}
-            <ArrowRight size={18} />
+          <button type="submit" className="submit-btn" disabled={isLoading}>
+            {isLoading ? 'Processing...' : (isLogin ? 'Sign In' : 'Sign Up')}
+            {!isLoading && <ArrowRight size={18} />}
           </button>
         </form>
 
@@ -356,6 +350,10 @@ export default function Login() {
           justify-content: center;
           gap: 0.5rem;
           margin-top: 0.5rem;
+        }
+        .submit-btn:disabled {
+          background: #fdba74;
+          cursor: not-allowed;
         }
         .login-footer { text-align: center; margin-top: 1rem; color: #666; }
         .toggle-btn {
