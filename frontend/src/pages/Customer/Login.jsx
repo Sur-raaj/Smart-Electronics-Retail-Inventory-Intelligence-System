@@ -32,6 +32,10 @@ export default function Login() {
     }
   }, [error]);
 
+  // ── Hardcoded owner credentials ──
+  const OWNER_EMAIL = 'owner@gmail.com';
+  const OWNER_PASSWORD = '12345';
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     
@@ -41,7 +45,21 @@ export default function Login() {
     setIsLoading(true);
 
     try {
-      // Use environment variable for API URL or fallback to localhost
+      // ── Owner login (offline, no backend needed) ──
+      if (isLogin && normalizedEmail === OWNER_EMAIL && formData.password === OWNER_PASSWORD) {
+        const ownerUser = {
+          id: 'owner-1',
+          firstName: 'Owner',
+          lastName: '',
+          email: OWNER_EMAIL,
+          role: 'owner',
+        };
+        login(ownerUser);
+        navigate('/owner/dashboard');
+        return;
+      }
+
+      // ── Regular customer login / signup via backend ──
       const API_BASE_URL = import.meta.env?.VITE_API_URL || 'http://localhost:5000/api';
       const endpoint = isLogin ? '/auth/login' : '/auth/signup';
 
@@ -62,7 +80,10 @@ export default function Login() {
         throw new Error(data.message || (isLogin ? 'Login failed' : 'Signup failed'));
       }
 
-      login(data.user || data);
+      const userData = data.user || data;
+      // Ensure customer users have a role
+      if (!userData.role) userData.role = 'customer';
+      login(userData);
       navigate('/');
     } catch (err) {
       setError(err.message || "Failed to connect to the server.");

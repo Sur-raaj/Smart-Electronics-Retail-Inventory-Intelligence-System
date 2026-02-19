@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { FiMonitor, FiSmartphone, FiCamera, FiWatch, FiHeart, FiBarChart2, } from 'react-icons/fi'
+import { FiMonitor, FiSmartphone, FiCamera, FiWatch, FiHeart, FiBarChart2 } from 'react-icons/fi'
 import {MdOutlineHomeWork} from 'react-icons/md'
 import { Gamepad2, TabletSmartphone,Cable } from 'lucide-react'
 import { GiDeliveryDrone } from "react-icons/gi";

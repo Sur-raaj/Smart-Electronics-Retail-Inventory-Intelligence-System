@@ -330,6 +330,17 @@ export default function Navbar({ cartCount = 0, wishlistCount = 0, compareCount 
           flex-shrink: 0;
         }
 
+        .owner-link {
+          background: rgba(249,115,22,0.12);
+          border-radius: 8px;
+          padding: 6px 10px !important;
+          border: 1px solid rgba(249,115,22,0.25);
+        }
+        .owner-link:hover {
+          background: rgba(249,115,22,0.22) !important;
+          border-color: rgba(249,115,22,0.4);
+        }
+
         .signin-btn {
           display: flex;
           align-items: center;

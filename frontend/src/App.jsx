@@ -13,6 +13,13 @@ import Checkout from './pages/Customer/Checkout'
 import Compare from './pages/Customer/Compare'
 import Profile from './pages/Customer/Profile'
 
+// Owner Pages
+import OwnerDashboard from './pages/Owner/Dashboard'
+import ProductManagement from './pages/Owner/ProductManagement'
+import OrderManagement from './pages/Owner/OrderManagement'
+import Analytics from './pages/Owner/Analytics'
+import OwnerLayout from './components/Owner/OwnerLayout'
+
 function ScrollToTop() {
   const { pathname } = useLocation()
 
@@ -31,6 +38,7 @@ export default function App() {
   const [compareItems, setCompareItems] = useState([])
   const [toasts, setToasts] = useState([])
   const { user } = useAuth()
+  const location = useLocation()
 
   const addToast = (data) => {
     const id = Date.now()
@@ -148,11 +156,15 @@ export default function App() {
     setCompareItems(prev => prev.filter(item => item.id !== id))
   }
 
+  const isOwnerRoute = location.pathname.startsWith('/owner');
+
   return (
     <div className="App">
       <ScrollToTop />
-      <Navbar cartCount={cartItems.reduce((acc, item) => acc + item.quantity, 0)} wishlistCount={wishlistItems.length} compareCount={compareItems.length} user={user} />
-      <main className="main-content">
+      {!isOwnerRoute && (
+        <Navbar cartCount={cartItems.reduce((acc, item) => acc + item.quantity, 0)} wishlistCount={wishlistItems.length} compareCount={compareItems.length} user={user} />
+      )}
+      <main className={isOwnerRoute ? '' : 'main-content'}>
         <Routes>
           <Route path="/" element={<Home addToCart={addToCart} toggleWishlist={toggleWishlist} wishlistItems={wishlistItems} toggleCompare={toggleCompare} compareItems={compareItems} />} />
           <Route path="/wishlist" element={<Wishlist items={wishlistItems} removeFromWishlist={removeFromWishlist} addToCart={addToCart} clearWishlist={clearWishlist} moveAllToCart={moveAllToCart} buyNowFromWishlist={buyNowFromWishlist} />} />
@@ -161,9 +173,17 @@ export default function App() {
           <Route path="/checkout" element={<Checkout cartItems={cartItems} selectedIds={checkoutSelection} onPaymentSuccess={removePurchasedFromCart} />} />
           <Route path="/login" element={<Login />} />
           <Route path="/profile" element={<Profile />} />
+
+          {/* Owner Routes — wrapped in OwnerLayout with its own navbar */}
+          <Route path="/owner" element={<OwnerLayout />}>
+            <Route path="dashboard" element={<OwnerDashboard />} />
+            <Route path="products" element={<ProductManagement />} />
+            <Route path="orders" element={<OrderManagement />} />
+            <Route path="analytics" element={<Analytics />} />
+          </Route>
         </Routes>
       </main>
-      <Footer />
+      {!isOwnerRoute && <Footer />}
       <div className="toast-container">
         {toasts.map(t => (
           <div key={t.id} className="toast-message">
