@@ -20,6 +20,12 @@ import OrderManagement from './pages/Owner/OrderManagement'
 import Analytics from './pages/Owner/Analytics'
 import OwnerLayout from './components/Owner/OwnerLayout'
 
+// Warehouse Pages
+import Inventory from './pages/Warehouse/Inventory'
+import StockMovements from './pages/Warehouse/StockMoments'
+import PurchaseOrders from './pages/Warehouse/PurchaseOrders'
+import Warehouses from './pages/Warehouse/Warehouses'
+
 function ScrollToTop() {
   const { pathname } = useLocation()
 
@@ -180,6 +186,12 @@ export default function App() {
             <Route path="products" element={<ProductManagement />} />
             <Route path="orders" element={<OrderManagement />} />
             <Route path="analytics" element={<Analytics />} />
+
+            {/* Warehouse Routes */}
+            <Route path="warehouse/inventory" element={<Inventory />} />
+            <Route path="warehouse/stock-movements" element={<StockMovements />} />
+            <Route path="warehouse/purchase-orders" element={<PurchaseOrders />} />
+            <Route path="warehouse/locations" element={<Warehouses />} />
           </Route>
         </Routes>
       </main>
