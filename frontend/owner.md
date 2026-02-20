@@ -1,6 +1,6 @@
-# Backend-Frontend Integration Guide — Owner Section
+# Backend Integration Guide — Owner Section
 
-> **For the Backend Developer**: The frontend Owner section is fully built and running with mock data. Follow this guide step-by-step to create the Django backend that syncs with it.
+> **For the Backend Developer**: The frontend Owner section is **fully built** and calls real API endpoints (no mock data). Follow this guide to build the Django backend that powers it.
 
 ---
 
@@ -8,10 +8,51 @@
 
 | Layer | Status |
 |-------|--------|
-| **Frontend** | Done — 4 pages, 8 components (incl. OwnerNavbar & OwnerLayout), mock data, API service, hooks |
-| **Backend** | Blank Django 6.0.2 project (`page`), SQLite3, no apps, no DRF |
+| **Frontend** | Done — 4 pages, 8 components, API service with Axios, JWT auth interceptors. All pages call real API endpoints. |
+| **Backend** | Blank Django 6.0.2 project (`page`), SQLite3, no apps, no DRF yet |
 
 **Frontend API base URL**: `http://localhost:8000/api` (configured in `src/Config/Config.js`)
+
+---
+
+## What Was Removed
+
+| Item | Reason |
+|------|--------|
+| `src/data/mockData.js` | Deleted — all pages now fetch from backend API |
+| `src/data/` folder | Deleted — was only used for mock data |
+
+---
+
+## Frontend File Structure (Final)
+
+```
+frontend/src/
+├── Config/
+│   └── Config.js                  ← API base URL config
+├── Context/
+│   └── AuthContext.jsx            ← Auth state, login/logout, role management
+├── services/
+│   └── api.js                     ← Axios instance + all API endpoints (ownerAPI + authAPI)
+├── components/Common/
+│   ├── Navbar.jsx                 ← Customer navbar
+│   └── Footer.jsx                 ← Customer footer
+├── components/Owner/
+│   ├── OwnerNavbar.jsx            ← Owner navbar with accent bar, user dropdown
+│   ├── OwnerLayout.jsx            ← Layout wrapper + auth guard for /owner/* routes
+│   ├── SalesOverviewCards.jsx     ← 4 KPI cards (receives data prop from API)
+│   ├── RevenueChart.jsx           ← Revenue + Profit line chart (Recharts, receives data prop)
+│   ├── TopProductsTable.jsx       ← Top 10 products table (receives data prop)
+│   ├── CategoryChart.jsx          ← Category pie chart (Recharts, receives data prop)
+│   ├── ProductModal.jsx           ← Add/Edit product modal
+│   └── OrderDetailsModal.jsx      ← Order details + timeline modal
+├── pages/Owner/
+│   ├── Dashboard.jsx              ← Calls ownerAPI.getSalesOverview/getRevenueTrend/getTopProducts/getCategoryPerformance
+│   ├── ProductManagement.jsx      ← Calls ownerAPI.getAllProducts/createProduct/updateProduct/deleteProduct + getCategories/getSuppliers
+│   ├── OrderManagement.jsx        ← Calls ownerAPI.getAllOrders/updateOrderStatus
+│   └── Analytics.jsx              ← Calls ownerAPI.getSalesOverview/getRevenueTrend/getTopProducts/getCategoryPerformance + getPaymentMethodStats/getOrderStatusStats/getLowStockProducts/getAllOrders
+└── App.jsx                        ← Main routing
+```
 
 ---
 
@@ -655,6 +696,9 @@ from .views import (
     RevenueTrendView,
     TopProductsView,
     CategoryPerformanceView,
+    PaymentMethodStatsView,
+    OrderStatusStatsView,
+    LowStockProductsView,
 )
 
 urlpatterns = [
@@ -662,6 +706,9 @@ urlpatterns = [
     path('analytics/revenue-trend/', RevenueTrendView.as_view()),
     path('analytics/top-products/', TopProductsView.as_view()),
     path('analytics/category-performance/', CategoryPerformanceView.as_view()),
+    path('analytics/payment-methods/', PaymentMethodStatsView.as_view()),
+    path('analytics/order-status/', OrderStatusStatsView.as_view()),
+    path('analytics/low-stock/', LowStockProductsView.as_view()),
 ]
 ```
 
@@ -837,6 +884,9 @@ These are the **exact** endpoints the frontend calls. All are prefixed with `/ap
 | `GET` | `/api/analytics/revenue-trend/?start_date=&end_date=&period=daily` | Revenue chart | `[{ period, revenue, profit, order_count }]` |
 | `GET` | `/api/analytics/top-products/?start_date=&end_date=&limit=10` | Top products table | `[{ rank, product_id, name, brand, category, total_quantity_sold, total_revenue, total_profit, profit_margin }]` |
 | `GET` | `/api/analytics/category-performance/?start_date=&end_date=` | Category pie chart | `[{ category_id, category_name, product_count, total_revenue, percentage }]` |
+| `GET` | `/api/analytics/payment-methods/?start_date=&end_date=` | Payment method breakdown (Analytics) | `[{ name, value }]` — name = payment method, value = total amount |
+| `GET` | `/api/analytics/order-status/` | Order status distribution (Analytics) | `[{ name, value }]` — name = status, value = count |
+| `GET` | `/api/analytics/low-stock/` | Low stock alert table (Analytics) | `[{ id, name, category_name, stock_quantity, reorder_level, status }]` |
 | `GET` | `/api/products/` | Product list | Paginated `{ count, next, previous, results: [...] }` |
 | `POST` | `/api/products/` | Add product | Product object |
 | `PUT` | `/api/products/:id/` | Edit product | Product object |
@@ -855,24 +905,130 @@ All field names use **snake_case** (Python convention). The frontend already fol
 
 **Product fields**: `id`, `name`, `category`, `category_name`, `brand`, `model_number`, `description`, `specifications`, `cost_price`, `selling_price`, `stock_quantity`, `reorder_level`, `supplier`, `supplier_name`, `warranty_months`, `status`, `image_url`, `created_at`, `updated_at`
 
-**Order fields**: `id`, `user`, `user_name`, `user_email`, `order_date`, `items_count`, `total_amount`, `tax_amount`, `shipping_cost`, `discount_amount`, `grand_total`, `status`, `payment_method`, `payment_status`, `tracking_number`, `shipping_address`
+**Order fields**: `id`, `user`, `user_name`, `user_email`, `user_phone`, `order_date`, `items_count`, `total_amount`, `tax_amount`, `shipping_cost`, `discount_amount`, `grand_total`, `status`, `payment_method`, `payment_status`, `tracking_number`, `shipping_address`
+
+**Important**: Products use `id` (not `product_id`) in list/CRUD endpoints. Orders use `id` (not `order_id`) in list/CRUD endpoints. Only the analytics `top-products` endpoint uses `product_id`.
 
 **Analytics fields**: Match the response shapes in the API table above exactly.
 
 ---
 
-## STEP 10: Switch Frontend from Mock to Live API
+## STEP 10: Additional Analytics Views (Required)
 
-Once backend is running, update `src/hooks/useDashboardData.js`:
+The frontend Analytics page calls 3 extra endpoints not covered in Step 6. Add these to `analytics/views.py`:
 
-1. Uncomment the `ownerAPI` import
-2. Uncomment the `Promise.all` fetch calls
-3. Remove or comment out mock data imports
-4. The `src/services/api.js` file already has all endpoints configured
+```python
+class PaymentMethodStatsView(APIView):
+    """
+    GET /api/analytics/payment-methods/
+    Query params: start_date, end_date
 
-The frontend is designed so that **only `useDashboardData.js` needs changing** for the dashboard. For Products/Orders pages, replace the mock data imports with API calls in:
-- `src/pages/Owner/ProductManagement.jsx` — replace `useState(mockProducts)` with a `useEffect` fetch
-- `src/pages/Owner/OrderManagement.jsx` — replace `useState(mockOrders)` with a `useEffect` fetch
+    Returns payment method revenue distribution for Analytics pie chart.
+    Response: [{ "name": "Credit Card", "value": 192997 }, ...]
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        start = request.query_params.get('start_date')
+        end = request.query_params.get('end_date')
+
+        orders = Order.objects.exclude(status='Cancelled')
+        if start:
+            orders = orders.filter(order_date__date__gte=start)
+        if end:
+            orders = orders.filter(order_date__date__lte=end)
+
+        data = (
+            orders.values('payment_method')
+            .annotate(value=Sum('grand_total'))
+            .order_by('-value')
+        )
+
+        result = [{'name': d['payment_method'], 'value': float(d['value'] or 0)} for d in data]
+        return Response(result)
+
+
+class OrderStatusStatsView(APIView):
+    """
+    GET /api/analytics/order-status/
+    Query params: start_date, end_date
+
+    Returns order status count distribution for Analytics pie chart.
+    Response: [{ "name": "Delivered", "value": 4 }, ...]
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        start = request.query_params.get('start_date')
+        end = request.query_params.get('end_date')
+
+        orders = Order.objects.all()
+        if start:
+            orders = orders.filter(order_date__date__gte=start)
+        if end:
+            orders = orders.filter(order_date__date__lte=end)
+
+        data = orders.values('status').annotate(value=Count('id')).order_by('-value')
+        result = [{'name': d['status'], 'value': d['value']} for d in data]
+        return Response(result)
+
+
+class LowStockProductsView(APIView):
+    """
+    GET /api/analytics/low-stock/
+    
+    Returns products where stock_quantity <= reorder_level.
+    Response: [{ "id": 1, "name": "...", "category_name": "...", "stock_quantity": 0, "reorder_level": 10, "status": "Out of Stock" }]
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        from products.models import Product
+        products = (
+            Product.objects.select_related('category')
+            .filter(stock_quantity__lte=models.F('reorder_level'))
+            .order_by('stock_quantity')
+        )
+        result = [
+            {
+                'id': p.pk,
+                'name': p.name,
+                'category_name': p.category.name,
+                'stock_quantity': p.stock_quantity,
+                'reorder_level': p.reorder_level,
+                'status': p.status,
+            }
+            for p in products
+        ]
+        return Response(result)
+```
+
+**Don't forget** to import `Count` at the top of `analytics/views.py`:
+```python
+from django.db.models import Sum, Count, Avg, F, Value
+```
+
+---
+
+## STEP 11: Add `user_phone` to Order Serializer
+
+The frontend OrderDetailsModal displays `user_phone`. Add a phone field to the User model or profile, and expose it in the OrderSerializer:
+
+```python
+# orders/serializers.py — add this property
+class OrderListSerializer(serializers.ModelSerializer):
+    user_name = serializers.CharField(read_only=True)
+    user_email = serializers.CharField(read_only=True)
+    user_phone = serializers.SerializerMethodField()
+    items_count = serializers.IntegerField(read_only=True)
+
+    def get_user_phone(self, obj):
+        # If using a Profile model with phone field:
+        # return getattr(obj.user.profile, 'phone', '')
+        # Or if phone is on User model:
+        # return obj.user.phone
+        return ''  # Implement based on your User/Profile model
+```
 
 ---
 
@@ -885,8 +1041,14 @@ After completing all steps, verify:
 - [ ] `http://localhost:8000/api/products/` returns JSON (after auth)
 - [ ] `http://localhost:8000/api/orders/` returns JSON (after auth)
 - [ ] `http://localhost:8000/api/analytics/sales-overview/` returns KPI data
+- [ ] `http://localhost:8000/api/analytics/payment-methods/` returns payment breakdown
+- [ ] `http://localhost:8000/api/analytics/order-status/` returns status counts
+- [ ] `http://localhost:8000/api/analytics/low-stock/` returns low stock products
+- [ ] `http://localhost:8000/api/categories/` returns categories list
+- [ ] `http://localhost:8000/api/suppliers/` returns suppliers list
 - [ ] Frontend at `http://localhost:5173/owner/dashboard` loads without CORS errors
 - [ ] JWT login works: POST to `/api/auth/login/` with `{ username, password }`
+- [ ] All 4 owner pages load data from backend (Dashboard, Products, Orders, Analytics)
 
 ---
 
@@ -909,24 +1071,18 @@ frontend/src/
 │   └── Config.js                  ← API base URL and environment config
 ├── context/                       ← (folder name: 'Context' on disk, imported as 'context')
 │   └── AuthContext.jsx            ← Auth state, login/logout, role management
-├── data/
-│   └── mockData.js                ← Mock data (matches backend response format)
 ├── services/
-│   └── api.js                     ← Axios instance + all API endpoints
-├── hooks/
-│   ├── useDashboardData.js        ← Dashboard data fetching hook
-│   └── useProductFilters.js       ← Product filter/search/sort hook
+│   └── api.js                     ← Axios instance + all API endpoints (ownerAPI + authAPI)
 ├── components/Common/
 │   ├── Navbar.jsx                 ← Customer navbar (shows for non-owner routes)
 │   └── Footer.jsx                 ← Customer footer (hidden on owner routes)
 ├── components/Owner/
 │   ├── OwnerNavbar.jsx            ← Owner navbar with accent bar, notification bell, user dropdown
 │   ├── OwnerLayout.jsx            ← Layout wrapper for /owner/* routes (auth guard)
-│   ├── SalesOverviewCards.jsx     ← 4 KPI cards
-│   ├── FilterButtons.jsx          ← Time range filter (7/30/90/365 days)
-│   ├── RevenueChart.jsx           ← Revenue + Profit line chart
+│   ├── SalesOverviewCards.jsx     ← 4 KPI cards (receives data from API via parent)
+│   ├── RevenueChart.jsx           ← Revenue + Profit line chart (Recharts)
 │   ├── TopProductsTable.jsx       ← Top 10 products table
-│   ├── CategoryChart.jsx          ← Category pie chart
+│   ├── CategoryChart.jsx          ← Category pie chart (Recharts)
 │   ├── ProductModal.jsx           ← Add/Edit product modal
 │   └── OrderDetailsModal.jsx      ← Order details + timeline modal
 ├── pages/Customer/
@@ -937,10 +1093,10 @@ frontend/src/
 │   ├── Compare.jsx
 │   └── Wishlist.jsx
 ├── pages/Owner/
-│   ├── Dashboard.jsx              ← Main owner dashboard
-│   ├── ProductManagement.jsx      ← Product CRUD page
-│   ├── OrderManagement.jsx        ← Order management page
-│   └── Analytics.jsx              ← Advanced analytics page
+│   ├── Dashboard.jsx              ← Calls ownerAPI — Dashboard with KPIs, charts, top products
+│   ├── ProductManagement.jsx      ← Calls ownerAPI — Product CRUD with search, filter, pagination
+│   ├── OrderManagement.jsx        ← Calls ownerAPI — Order list with status filter, detail modal
+│   └── Analytics.jsx              ← Calls ownerAPI — Revenue, product, and order analytics tabs
 └── App.jsx                        ← Main routing (owner routes wrapped in OwnerLayout)
 ```
 
@@ -1279,22 +1435,35 @@ VITE_API_BASE_URL=https://yourdomain.com/api
 
 **Backend Developer Tasks:**
 
-- [ ] Create `/api/auth/signup` endpoint with all validation rules
+- [ ] Install DRF, CORS, SimpleJWT, Pillow, django-filter (Step 1)
+- [ ] Update `settings.py` — INSTALLED_APPS, CORS, REST_FRAMEWORK, JWT (Step 2)
+- [ ] Create Django apps: `products`, `orders`, `analytics` (Step 3)
+- [ ] Define models: Category, Supplier, Product, Order, OrderItem (Step 4)
+- [ ] Create serializers for all models (Step 5)
+- [ ] Create views: ProductViewSet, OrderViewSet, 7 analytics APIViews (Steps 6 + 10)
+- [ ] Configure URL routing for all endpoints (Step 7)
+- [ ] Run migrations and create superuser (Step 8)
+- [ ] Seed sample data for testing (Step 9)
+- [ ] Add `user_phone` to Order serializer (Step 11)
+- [ ] Create `/api/auth/signup` endpoint with validation rules
 - [ ] Create `/api/auth/login` endpoint returning user + JWT token + role field
 - [ ] Create `/api/auth/profile` endpoint (authenticated, returns user data)
 - [ ] Add `role` field to User model (`'customer'` or `'owner'`)
-- [ ] Implement JWT authentication (use `djangorestframework-simplejwt`)
 - [ ] Add CORS configuration for `http://localhost:5173`
-- [ ] (Optional) Add owner login endpoint returning `role: 'owner'`
+- [ ] Test all 17 API endpoints listed in the endpoint reference table
 
-**Frontend Developer Tasks:**
+**Frontend Status (Completed):**
 
-- [x] Owner login flow (hardcoded, works offline)
+- [x] All 4 Owner pages call real API endpoints (no mock data)
+- [x] Dashboard fetches KPIs, revenue trend, top products, category performance
+- [x] Analytics fetches summary, trends, payment stats, order stats, low stock
+- [x] ProductManagement does full CRUD via API (create/read/update/delete)
+- [x] OrderManagement fetches orders and updates status via API
+- [x] Loading states with skeleton/spinner on all pages
+- [x] Error states with retry buttons on all pages
+- [x] Refresh buttons on all pages to re-fetch data
+- [x] `data/mockData.js` removed — no mock data dependency
 - [x] Owner navbar with navigation
 - [x] Owner layout with auth guard
 - [x] Customer login/signup form
 - [x] Profile page UI
-- [ ] Update `API_BASE_URL` in `.env` when backend is ready
-- [ ] Test login/signup flow with real backend
-- [ ] Add profile data fetching in Profile.jsx
-- [ ] Add error handling for network failures

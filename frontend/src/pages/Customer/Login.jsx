@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom'; // Import useNavigate
 import { Mail, Lock, User, MapPin, ArrowRight, Phone, Calendar, Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import config from '../../Config/Config';
 
 export default function Login() {
   const [isLogin, setIsLogin] = useState(true);
@@ -36,12 +37,50 @@ export default function Login() {
   const OWNER_EMAIL = 'owner@gmail.com';
   const OWNER_PASSWORD = '12345';
 
+  const validateSignup = (normalizedEmail) => {
+    const emailOk = /(@gmail\.com|\.edu\.np)$/i.test(normalizedEmail);
+    if (!emailOk) return 'Email must end with @gmail.com or .edu.np';
+
+    const strongPassword = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z\d]).{8,}$/;
+    if (!strongPassword.test(formData.password)) {
+      return 'Password must be 8+ chars with uppercase, lowercase, number, and special character';
+    }
+
+    if (formData.password !== formData.confirmPassword) {
+      return 'Password and confirm password do not match';
+    }
+
+    const phoneOk = /^\d{10}$/.test(formData.phone);
+    if (!phoneOk) return 'Phone number must be exactly 10 digits';
+
+    if (!formData.dob) return 'Date of birth is required';
+    const today = new Date();
+    const dob = new Date(formData.dob);
+    let age = today.getFullYear() - dob.getFullYear();
+    const monthDiff = today.getMonth() - dob.getMonth();
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < dob.getDate())) {
+      age -= 1;
+    }
+    if (age < 16) return 'You must be at least 16 years old to sign up';
+
+    return '';
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     
     const normalizedEmail = formData.email.toLowerCase().trim();
     
     setError('');
+
+    if (!isLogin) {
+      const validationError = validateSignup(normalizedEmail);
+      if (validationError) {
+        setError(validationError);
+        return;
+      }
+    }
+
     setIsLoading(true);
 
     try {
@@ -60,8 +99,8 @@ export default function Login() {
       }
 
       // ── Regular customer login / signup via backend ──
-      const API_BASE_URL = import.meta.env?.VITE_API_URL || 'http://localhost:5000/api';
-      const endpoint = isLogin ? '/auth/login' : '/auth/signup';
+      const API_BASE_URL = config.API_BASE_URL;
+      const endpoint = isLogin ? '/auth/login/' : '/auth/signup/';
 
       const response = await fetch(`${API_BASE_URL}${endpoint}`, {
         method: 'POST',

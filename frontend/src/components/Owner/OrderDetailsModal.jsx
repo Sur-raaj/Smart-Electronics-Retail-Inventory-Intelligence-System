@@ -35,7 +35,7 @@ export default function OrderDetailsModal({ isOpen, onClose, order, onStatusUpda
         {/* Header */}
         <div className="odm-header">
           <div>
-            <h2 className="odm-title">Order #{order.order_id}</h2>
+            <h2 className="odm-title">Order #{order.id}</h2>
             <span className="odm-date">{new Date(order.order_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
           </div>
           <div className="odm-header-right">
@@ -124,7 +124,7 @@ export default function OrderDetailsModal({ isOpen, onClose, order, onStatusUpda
                   const sc = statusColors[s];
                   return (
                     <button key={s} className="odm-status-action-btn" style={{ background: sc.bg, color: sc.color, border: `1px solid ${sc.color}30` }}
-                      onClick={() => onStatusUpdate(order.order_id, s)}>
+                      onClick={() => onStatusUpdate(order.id, s)}>
                       {s}
                     </button>
                   );

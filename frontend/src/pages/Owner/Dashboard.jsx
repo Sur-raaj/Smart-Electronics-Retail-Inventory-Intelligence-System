@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { RefreshCw, AlertCircle } from 'lucide-react';
-import { mockSalesOverview, mockRevenueTrend, mockTopProducts, mockCategoryPerformance } from '../../data/mockData';
+import { ownerAPI } from '../../services/api';
 import SalesOverviewCards from '../../components/Owner/SalesOverviewCards';
 import RevenueChart from '../../components/Owner/RevenueChart';
 import TopProductsTable from '../../components/Owner/TopProductsTable';
@@ -38,12 +38,16 @@ function useDashboardData(timeRange) {
     try {
       setLoading(true);
       setError(null);
-      await new Promise((r) => setTimeout(r, 600));
-      // When backend is ready, replace with ownerAPI calls (see services/api.js)
-      setSalesData(mockSalesOverview);
-      setRevenueTrend(mockRevenueTrend.slice(0, timeRange <= 7 ? 7 : 30));
-      setTopProducts(mockTopProducts);
-      setCategoryData(mockCategoryPerformance);
+      const [salesRes, trendRes, topRes, catRes] = await Promise.all([
+        ownerAPI.getSalesOverview({ days: timeRange }),
+        ownerAPI.getRevenueTrend({ days: timeRange }),
+        ownerAPI.getTopProducts({ days: timeRange }),
+        ownerAPI.getCategoryPerformance({ days: timeRange }),
+      ]);
+      setSalesData(salesRes.data);
+      setRevenueTrend(trendRes.data);
+      setTopProducts(topRes.data);
+      setCategoryData(catRes.data);
     } catch (err) {
       const msg = !err.response ? 'Network error. Please check your connection.'
         : err.response.status === 403 ? 'You do not have permission to view this data'

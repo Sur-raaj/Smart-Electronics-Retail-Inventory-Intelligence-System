@@ -1,6 +1,6 @@
-import { useState } from 'react';
-import { Search, Download, ChevronLeft, ChevronRight, Eye, ShoppingBag } from 'lucide-react';
-import { mockOrders } from '../../data/mockData';
+import { useState, useEffect, useCallback } from 'react';
+import { Search, Download, ChevronLeft, ChevronRight, Eye, ShoppingBag, RefreshCw, AlertCircle } from 'lucide-react';
+import { ownerAPI } from '../../services/api';
 import OrderDetailsModal from '../../components/Owner/OrderDetailsModal';
 
 const fmt = (v) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(v);
@@ -14,18 +14,35 @@ const statusColors = {
 };
 
 export default function OrderManagement() {
-  const [orders, setOrders] = useState(mockOrders);
+  const [orders, setOrders] = useState([]);
+  const [pageLoading, setPageLoading] = useState(true);
+  const [pageError, setPageError] = useState(null);
   const [statusFilter, setStatusFilter] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedOrder, setSelectedOrder] = useState(null);
+
+  const fetchOrders = useCallback(async () => {
+    try {
+      setPageLoading(true);
+      setPageError(null);
+      const res = await ownerAPI.getAllOrders({ page_size: 1000 });
+      setOrders(res.data.results || res.data);
+    } catch (err) {
+      setPageError(err.response?.data?.message || 'Failed to load orders. Please try again.');
+    } finally {
+      setPageLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { fetchOrders(); }, [fetchOrders]);
 
   const filtered = orders.filter((o) => {
     if (statusFilter && o.status !== statusFilter) return false;
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
       return (
-        String(o.order_id).includes(q) ||
+        String(o.id).includes(q) ||
         o.user_name.toLowerCase().includes(q) ||
         o.user_email.toLowerCase().includes(q)
       );
@@ -37,14 +54,19 @@ export default function OrderManagement() {
   const totalPages = Math.ceil(filtered.length / perPage);
   const paged = filtered.slice((currentPage - 1) * perPage, currentPage * perPage);
 
-  const handleStatusUpdate = (orderId, newStatus) => {
-    setOrders((prev) => prev.map((o) => o.order_id === orderId ? { ...o, status: newStatus } : o));
-    setSelectedOrder((prev) => prev && prev.order_id === orderId ? { ...prev, status: newStatus } : prev);
+  const handleStatusUpdate = async (orderId, newStatus) => {
+    try {
+      await ownerAPI.updateOrderStatus(orderId, newStatus);
+      setOrders((prev) => prev.map((o) => o.id === orderId ? { ...o, status: newStatus } : o));
+      setSelectedOrder((prev) => prev && prev.id === orderId ? { ...prev, status: newStatus } : prev);
+    } catch (err) {
+      alert(err.response?.data?.detail || 'Failed to update order status');
+    }
   };
 
   const exportCSV = () => {
     const header = 'Order ID,Customer,Date,Items,Total,Status,Payment\n';
-    const rows = filtered.map((o) => `${o.order_id},${o.user_name},${o.order_date},${o.items_count},${o.grand_total},${o.status},${o.payment_method}`).join('\n');
+    const rows = filtered.map((o) => `${o.id},${o.user_name},${o.order_date},${o.items_count},${o.grand_total},${o.status},${o.payment_method}`).join('\n');
     const blob = new Blob([header + rows], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -63,7 +85,17 @@ export default function OrderManagement() {
           <p className="owner-om-sub">{orders.length} total orders</p>
         </div>
         <button className="owner-om-export-btn" onClick={exportCSV}><Download size={16} /> Export CSV</button>
+        <button className="owner-om-refresh-btn" onClick={fetchOrders} disabled={pageLoading}><RefreshCw size={16} className={pageLoading ? 'spin' : ''} /></button>
       </div>
+
+      {/* Error */}
+      {pageError && (
+        <div className="owner-om-error">
+          <AlertCircle size={18} />
+          <span>{pageError}</span>
+          <button onClick={fetchOrders} className="om-retry-btn">Retry</button>
+        </div>
+      )}
 
       {/* Status Pills */}
       <div className="owner-om-status-pills">
@@ -112,8 +144,8 @@ export default function OrderManagement() {
               paged.map((o) => {
                 const sc = statusColors[o.status] || statusColors.Pending;
                 return (
-                  <tr key={o.order_id} className="om-row" onClick={() => setSelectedOrder(o)}>
-                    <td className="om-id">#{o.order_id}</td>
+                  <tr key={o.id} className="om-row" onClick={() => setSelectedOrder(o)}>
+                    <td className="om-id">#{o.id}</td>
                     <td>
                       <div className="om-customer">
                         <span className="om-cust-name">{o.user_name}</span>
@@ -165,6 +197,16 @@ export default function OrderManagement() {
         .owner-om-sub { font-size: 0.85rem; color: #6b7280; margin-top: 0.15rem; }
         .owner-om-export-btn { display: inline-flex; align-items: center; gap: 6px; padding: 0.55rem 1.15rem; border-radius: 8px; background: #232F3E; color: #fff; font-weight: 600; font-size: 0.82rem; cursor: pointer; border: none; font-family: inherit; transition: background 0.15s; }
         .owner-om-export-btn:hover { background: #37475A; }
+        .owner-om-refresh-btn { display: inline-flex; align-items: center; justify-content: center; width: 38px; height: 38px; border-radius: 8px; background: #232F3E; color: #fff; cursor: pointer; border: none; transition: background 0.15s; }
+        .owner-om-refresh-btn:hover { background: #37475A; }
+        .owner-om-refresh-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+        .spin { animation: spinAnim 1s linear infinite; }
+        @keyframes spinAnim { from { transform: rotate(0); } to { transform: rotate(360deg); } }
+
+        /* Error */
+        .owner-om-error { max-width: 1280px; margin: 0 auto 1rem; display: flex; align-items: center; gap: 0.75rem; padding: 0.85rem 1.25rem; border-radius: 10px; background: #FEF2F2; border: 1px solid #FECACA; color: #DC2626; font-size: 0.85rem; font-weight: 500; }
+        .om-retry-btn { margin-left: auto; padding: 0.35rem 0.85rem; border-radius: 6px; background: #DC2626; color: #fff; font-weight: 600; font-size: 0.78rem; border: none; cursor: pointer; font-family: inherit; }
+        .om-retry-btn:hover { background: #b91c1c; }
 
         /* Status Pills */
         .owner-om-status-pills { max-width: 1280px; margin: 0 auto 1rem; display: flex; gap: 0.4rem; flex-wrap: wrap; }

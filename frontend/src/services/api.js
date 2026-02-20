@@ -38,6 +38,9 @@ export const ownerAPI = {
   getRevenueTrend: (params) => api.get('/analytics/revenue-trend/', { params }),
   getTopProducts: (params) => api.get('/analytics/top-products/', { params }),
   getCategoryPerformance: (params) => api.get('/analytics/category-performance/', { params }),
+  getPaymentMethodStats: (params) => api.get('/analytics/payment-methods/', { params }),
+  getOrderStatusStats: (params) => api.get('/analytics/order-status/', { params }),
+  getLowStockProducts: (params) => api.get('/analytics/low-stock/', { params }),
 
   // Product Management
   getAllProducts: (params) => api.get('/products/', { params }),

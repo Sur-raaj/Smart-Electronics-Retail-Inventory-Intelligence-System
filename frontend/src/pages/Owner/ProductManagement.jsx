@@ -1,6 +1,6 @@
-import { useState, useMemo, useCallback } from 'react';
-import { Search, Plus, Pencil, Trash2, RotateCcw, ChevronLeft, ChevronRight, Package } from 'lucide-react';
-import { mockProducts, mockCategories, mockSuppliers } from '../../data/mockData';
+import { useState, useMemo, useCallback, useEffect } from 'react';
+import { Search, Plus, Pencil, Trash2, RotateCcw, ChevronLeft, ChevronRight, Package, AlertCircle, RefreshCw } from 'lucide-react';
+import { ownerAPI } from '../../services/api';
 import ProductModal from '../../components/Owner/ProductModal';
 
 const fmt = (v) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(v);
@@ -41,13 +41,38 @@ function useProductFilters(products = []) {
 }
 
 export default function ProductManagement() {
-  const [products, setProducts] = useState(mockProducts);
+  const [products, setProducts] = useState([]);
+  const [categoriesList, setCategoriesList] = useState([]);
+  const [suppliersList, setSuppliersList] = useState([]);
+  const [pageLoading, setPageLoading] = useState(true);
+  const [pageError, setPageError] = useState(null);
   const {
     filteredProducts, searchQuery, setSearchQuery,
     selectedCategory, setSelectedCategory,
     minPrice, setMinPrice, maxPrice, setMaxPrice,
     sortBy, setSortBy, resetFilters,
   } = useProductFilters(products);
+
+  const fetchData = useCallback(async () => {
+    try {
+      setPageLoading(true);
+      setPageError(null);
+      const [prodRes, catRes, supRes] = await Promise.all([
+        ownerAPI.getAllProducts({ page_size: 1000 }),
+        ownerAPI.getCategories(),
+        ownerAPI.getSuppliers(),
+      ]);
+      setProducts(prodRes.data.results || prodRes.data);
+      setCategoriesList(catRes.data);
+      setSuppliersList(supRes.data);
+    } catch (err) {
+      setPageError(err.response?.data?.message || 'Failed to load products. Please try again.');
+    } finally {
+      setPageLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { fetchData(); }, [fetchData]);
 
   const [currentPage, setCurrentPage] = useState(1);
   const [showModal, setShowModal] = useState(false);
@@ -63,19 +88,30 @@ export default function ProductManagement() {
   const openAdd = () => { setEditingProduct(null); setShowModal(true); };
   const openEdit = (p) => { setEditingProduct(p); setShowModal(true); };
 
-  const handleSave = (data) => {
-    if (editingProduct) {
-      setProducts((prev) => prev.map((p) => p.product_id === editingProduct.product_id ? { ...p, ...data } : p));
-    } else {
-      setProducts((prev) => [...prev, { ...data, product_id: Date.now() }]);
+  const handleSave = async (data) => {
+    try {
+      if (editingProduct) {
+        const res = await ownerAPI.updateProduct(editingProduct.id, data);
+        setProducts((prev) => prev.map((p) => p.id === editingProduct.id ? res.data : p));
+      } else {
+        const res = await ownerAPI.createProduct(data);
+        setProducts((prev) => [...prev, res.data]);
+      }
+      setShowModal(false);
+    } catch (err) {
+      alert(err.response?.data?.detail || 'Failed to save product');
     }
-    setShowModal(false);
   };
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (deleteConfirm) {
-      setProducts((prev) => prev.filter((p) => p.product_id !== deleteConfirm.product_id));
-      setDeleteConfirm(null);
+      try {
+        await ownerAPI.deleteProduct(deleteConfirm.id);
+        setProducts((prev) => prev.filter((p) => p.id !== deleteConfirm.id));
+        setDeleteConfirm(null);
+      } catch (err) {
+        alert(err.response?.data?.detail || 'Failed to delete product');
+      }
     }
   };
 
@@ -87,8 +123,20 @@ export default function ProductManagement() {
           <h1 className="owner-pm-title">Product Management</h1>
           <p className="owner-pm-sub">{products.length} products · {products.filter((p) => p.status === 'Active').length} active</p>
         </div>
-        <button className="owner-pm-add-btn" onClick={openAdd}><Plus size={18} /> Add Product</button>
+        <div style={{ display: 'flex', gap: '0.5rem' }}>
+          <button className="owner-pm-refresh-btn" onClick={fetchData} disabled={pageLoading}><RefreshCw size={16} className={pageLoading ? 'spin' : ''} /></button>
+          <button className="owner-pm-add-btn" onClick={openAdd}><Plus size={18} /> Add Product</button>
+        </div>
       </div>
+
+      {/* Error */}
+      {pageError && (
+        <div className="owner-pm-error">
+          <AlertCircle size={18} />
+          <span>{pageError}</span>
+          <button onClick={fetchData} className="pm-retry-btn">Retry</button>
+        </div>
+      )}
 
       {/* Filters */}
       <div className="owner-pm-filters">
@@ -130,7 +178,7 @@ export default function ProductManagement() {
               <tr><td colSpan={8} className="owner-pm-empty"><Package size={32} /><span>No products found</span></td></tr>
             ) : (
               paged.map((p) => (
-                <tr key={p.product_id}>
+                <tr key={p.id}>
                   <td>
                     <div className="pm-product-cell">
                       {p.image_url ? (
@@ -181,7 +229,7 @@ export default function ProductManagement() {
       )}
 
       {/* Modals */}
-      <ProductModal isOpen={showModal} onClose={() => setShowModal(false)} onSave={handleSave} product={editingProduct} categories={mockCategories} suppliers={mockSuppliers} />
+      <ProductModal isOpen={showModal} onClose={() => setShowModal(false)} onSave={handleSave} product={editingProduct} categories={categoriesList} suppliers={suppliersList} />
 
       {deleteConfirm && (
         <div className="pm-del-overlay" onClick={() => setDeleteConfirm(null)}>
@@ -204,6 +252,16 @@ export default function ProductManagement() {
         .owner-pm-sub { font-size: 0.85rem; color: #6b7280; margin-top: 0.15rem; }
         .owner-pm-add-btn { display: inline-flex; align-items: center; gap: 6px; padding: 0.55rem 1.15rem; border-radius: 8px; background: #F97316; color: #fff; font-weight: 600; font-size: 0.85rem; cursor: pointer; border: none; font-family: inherit; transition: background 0.15s; }
         .owner-pm-add-btn:hover { background: #ea580c; }
+        .owner-pm-refresh-btn { display: inline-flex; align-items: center; justify-content: center; width: 38px; height: 38px; border-radius: 8px; background: #232F3E; color: #fff; cursor: pointer; border: none; transition: background 0.15s; }
+        .owner-pm-refresh-btn:hover { background: #37475A; }
+        .owner-pm-refresh-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+        .spin { animation: spinAnim 1s linear infinite; }
+        @keyframes spinAnim { from { transform: rotate(0); } to { transform: rotate(360deg); } }
+
+        /* Error */
+        .owner-pm-error { max-width: 1280px; margin: 0 auto 1rem; display: flex; align-items: center; gap: 0.75rem; padding: 0.85rem 1.25rem; border-radius: 10px; background: #FEF2F2; border: 1px solid #FECACA; color: #DC2626; font-size: 0.85rem; font-weight: 500; }
+        .pm-retry-btn { margin-left: auto; padding: 0.35rem 0.85rem; border-radius: 6px; background: #DC2626; color: #fff; font-weight: 600; font-size: 0.78rem; border: none; cursor: pointer; font-family: inherit; }
+        .pm-retry-btn:hover { background: #b91c1c; }
 
         /* Filters */
         .owner-pm-filters { max-width: 1280px; margin: 0 auto 1rem; display: flex; gap: 0.6rem; flex-wrap: wrap; align-items: center; }

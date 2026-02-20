@@ -1,7 +1,7 @@
-import { useState, useMemo } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
-import { TrendingUp, TrendingDown, DollarSign, Users, Package, AlertTriangle, Printer, Download } from 'lucide-react';
-import { mockRevenueTrend, mockTopProducts, mockCategoryPerformance, mockProducts, mockOrders } from '../../data/mockData';
+import { TrendingUp, TrendingDown, DollarSign, Users, Package, AlertTriangle, Printer, Download, RefreshCw, AlertCircle } from 'lucide-react';
+import { ownerAPI } from '../../services/api';
 
 const fmt = (v) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(v);
 const fmtShort = (v) => { if (v >= 10000000) return `₹${(v / 10000000).toFixed(1)}Cr`; if (v >= 100000) return `₹${(v / 100000).toFixed(1)}L`; if (v >= 1000) return `₹${(v / 1000).toFixed(0)}K`; return `₹${v}`; };
@@ -9,39 +9,56 @@ const COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899'
 
 export default function Analytics() {
   const [activeTab, setActiveTab] = useState('revenue');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
-  // Computed analytics data
-  const monthlyRevenue = useMemo(() => {
-    const months = {};
-    mockRevenueTrend.forEach((d) => {
-      const m = d.period.substring(0, 7);
-      if (!months[m]) months[m] = { month: m, revenue: 0, profit: 0, orders: 0 };
-      months[m].revenue += d.revenue;
-      months[m].profit += d.profit;
-      months[m].orders += d.order_count;
-    });
-    return Object.values(months);
+  // API data states
+  const [summary, setSummary] = useState({ total_revenue: 0, total_profit: 0, total_orders: 0 });
+  const [revenueTrend, setRevenueTrend] = useState([]);
+  const [monthlyRevenue, setMonthlyRevenue] = useState([]);
+  const [topProducts, setTopProducts] = useState([]);
+  const [categoryData, setCategoryData] = useState([]);
+  const [paymentMethods, setPaymentMethods] = useState([]);
+  const [statusDistribution, setStatusDistribution] = useState([]);
+  const [lowStockProducts, setLowStockProducts] = useState([]);
+  const [recentOrders, setRecentOrders] = useState([]);
+
+  const fetchData = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const [summaryRes, trendRes, monthlyRes, topRes, catRes, payRes, statusRes, lowStockRes, ordersRes] = await Promise.all([
+        ownerAPI.getSalesOverview(),
+        ownerAPI.getRevenueTrend(),
+        ownerAPI.getRevenueTrend({ period: 'monthly' }),
+        ownerAPI.getTopProducts(),
+        ownerAPI.getCategoryPerformance(),
+        ownerAPI.getPaymentMethodStats(),
+        ownerAPI.getOrderStatusStats(),
+        ownerAPI.getLowStockProducts(),
+        ownerAPI.getAllOrders({ page_size: 6, ordering: '-order_date' }),
+      ]);
+      setSummary(summaryRes.data);
+      setRevenueTrend(trendRes.data);
+      setMonthlyRevenue(monthlyRes.data);
+      setTopProducts(topRes.data);
+      setCategoryData(catRes.data);
+      setPaymentMethods(payRes.data);
+      setStatusDistribution(statusRes.data);
+      setLowStockProducts(lowStockRes.data);
+      setRecentOrders(ordersRes.data.results || ordersRes.data);
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to load analytics data. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  const lowStockProducts = useMemo(() =>
-    mockProducts.filter((p) => p.stock_quantity <= (p.reorder_level || 10)).sort((a, b) => a.stock_quantity - b.stock_quantity),
-  []);
+  useEffect(() => { fetchData(); }, [fetchData]);
 
-  const paymentMethods = useMemo(() => {
-    const pm = {};
-    mockOrders.forEach((o) => { pm[o.payment_method] = (pm[o.payment_method] || 0) + o.grand_total; });
-    return Object.entries(pm).map(([name, value]) => ({ name, value }));
-  }, []);
-
-  const statusDistribution = useMemo(() => {
-    const sd = {};
-    mockOrders.forEach((o) => { sd[o.status] = (sd[o.status] || 0) + 1; });
-    return Object.entries(sd).map(([name, value]) => ({ name, value }));
-  }, []);
-
-  const totalRevenue = mockRevenueTrend.reduce((s, d) => s + d.revenue, 0);
-  const totalProfit = mockRevenueTrend.reduce((s, d) => s + d.profit, 0);
-  const totalOrders = mockRevenueTrend.reduce((s, d) => s + d.order_count, 0);
+  const totalRevenue = summary.total_revenue || 0;
+  const totalProfit = summary.total_profit || 0;
+  const totalOrders = summary.total_orders || 0;
 
   const tabs = [
     { key: 'revenue', label: 'Revenue' },
@@ -58,10 +75,20 @@ export default function Analytics() {
           <p className="owner-an-sub">Insights into your store performance</p>
         </div>
         <div className="owner-an-actions">
+          <button className="an-action-btn" onClick={fetchData} disabled={loading}><RefreshCw size={16} className={loading ? 'spin' : ''} /> Refresh</button>
           <button className="an-action-btn" onClick={() => window.print()}><Printer size={16} /> Print</button>
           <button className="an-action-btn primary"><Download size={16} /> Export</button>
         </div>
       </div>
+
+      {/* Error */}
+      {error && (
+        <div className="owner-an-error">
+          <AlertCircle size={18} />
+          <span>{error}</span>
+          <button onClick={fetchData} className="an-retry-btn">Retry</button>
+        </div>
+      )}
 
       {/* Summary Cards */}
       <div className="owner-an-summary">
@@ -131,7 +158,7 @@ export default function Analytics() {
           <div className="an-chart-card">
             <h3 className="an-card-title">Daily Revenue Trend</h3>
             <ResponsiveContainer width="100%" height={280}>
-              <LineChart data={mockRevenueTrend} margin={{ top: 10, right: 20, left: 10, bottom: 0 }}>
+              <LineChart data={revenueTrend} margin={{ top: 10, right: 20, left: 10, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                 <XAxis dataKey="period" tick={{ fontSize: 11, fill: '#9ca3af' }} tickFormatter={(v) => v.substring(5)} />
                 <YAxis tick={{ fontSize: 11, fill: '#9ca3af' }} tickFormatter={fmtShort} />
@@ -152,7 +179,7 @@ export default function Analytics() {
             <div className="an-chart-card">
               <h3 className="an-card-title">Category Performance</h3>
               <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={mockCategoryPerformance} layout="vertical" margin={{ top: 0, right: 20, left: 10, bottom: 0 }}>
+                <BarChart data={categoryData} layout="vertical" margin={{ top: 0, right: 20, left: 10, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                   <XAxis type="number" tick={{ fontSize: 11, fill: '#9ca3af' }} tickFormatter={fmtShort} />
                   <YAxis type="category" dataKey="category_name" tick={{ fontSize: 11, fill: '#374151' }} width={100} />
@@ -166,7 +193,7 @@ export default function Analytics() {
             <div className="an-chart-card">
               <h3 className="an-card-title">Top Products by Revenue</h3>
               <div className="an-top-list">
-                {mockTopProducts.slice(0, 5).map((p, i) => (
+                {topProducts.slice(0, 5).map((p, i) => (
                   <div key={p.product_id} className="an-top-item">
                     <span className="an-top-rank">{i + 1}</span>
                     <div className="an-top-info">
@@ -242,11 +269,11 @@ export default function Analytics() {
             <div className="an-chart-card">
               <h3 className="an-card-title">Orders Summary</h3>
               <div className="an-top-list">
-                {mockOrders.slice(0, 6).map((o) => {
+                {recentOrders.slice(0, 6).map((o) => {
                   const sc = { Pending: '#CA8A04', Processing: '#2563EB', Shipped: '#7C3AED', Delivered: '#16A34A', Cancelled: '#DC2626' };
                   return (
-                    <div key={o.order_id} className="an-top-item">
-                      <span className="an-order-id">#{o.order_id}</span>
+                    <div key={o.id} className="an-top-item">
+                      <span className="an-order-id">#{o.id}</span>
                       <div className="an-top-info">
                         <span className="an-top-name">{o.user_name}</span>
                         <span className="an-top-meta">{new Date(o.order_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}</span>
@@ -272,6 +299,13 @@ export default function Analytics() {
         .an-action-btn:hover { border-color: #9ca3af; background: #f3f4f6; }
         .an-action-btn.primary { background: #F97316; color: #fff; border-color: #F97316; }
         .an-action-btn.primary:hover { background: #ea580c; }
+        .spin { animation: spinAnim 1s linear infinite; }
+        @keyframes spinAnim { from { transform: rotate(0); } to { transform: rotate(360deg); } }
+
+        /* Error */
+        .owner-an-error { max-width: 1280px; margin: 0 auto 1.25rem; display: flex; align-items: center; gap: 0.75rem; padding: 0.85rem 1.25rem; border-radius: 10px; background: #FEF2F2; border: 1px solid #FECACA; color: #DC2626; font-size: 0.85rem; font-weight: 500; }
+        .an-retry-btn { margin-left: auto; padding: 0.35rem 0.85rem; border-radius: 6px; background: #DC2626; color: #fff; font-weight: 600; font-size: 0.78rem; border: none; cursor: pointer; font-family: inherit; }
+        .an-retry-btn:hover { background: #b91c1c; }
 
         /* Summary */
         .owner-an-summary { max-width: 1280px; margin: 0 auto 1.5rem; display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; }
