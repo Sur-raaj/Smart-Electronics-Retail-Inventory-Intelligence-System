@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom'; // Import useNavigate
-import { Mail, Lock, User, MapPin, ArrowRight, Phone, Calendar, Eye, EyeOff } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Mail, Lock, User, MapPin, ArrowRight, Phone, Calendar, Eye, EyeOff, Store, Warehouse, Shield } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import { authAPI } from '../../services/api';
 import config from '../../Config/Config';
 
 export default function Login() {
@@ -23,7 +24,8 @@ export default function Login() {
     address: '',
     phone: '',
     gender: '',
-    dob: ''
+    dob: '',
+    role: 'customer'
   });
 
   useEffect(() => {
@@ -109,25 +111,14 @@ export default function Login() {
     setIsLoading(true);
 
     try {
-      // ── All login/signup goes through backend API ──
-      const API_BASE_URL = config.API_BASE_URL;
-      const endpoint = isLogin ? '/auth/login/' : '/auth/signup/';
-
-      const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(isLogin 
-          ? { email: normalizedEmail, password: formData.password }
-          : { ...formData, email: normalizedEmail }
-        ),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || (isLogin ? 'Invalid email or password' : 'Signup failed'));
+      // ── All login/signup goes through authAPI (axios with JWT interceptor) ──
+      let data;
+      if (isLogin) {
+        const response = await authAPI.login({ email: normalizedEmail, password: formData.password });
+        data = response.data;
+      } else {
+        const response = await authAPI.register({ ...formData, email: normalizedEmail });
+        data = response.data;
       }
 
       // ── Store JWT tokens ──
@@ -145,11 +136,16 @@ export default function Login() {
       // ── Redirect based on role ──
       if (userData.role === 'owner') {
         navigate('/owner/dashboard');
+      } else if (userData.role === 'warehouse') {
+        navigate('/warehouse/dashboard');
+      } else if (userData.role === 'admin') {
+        navigate('/admin/dashboard');
       } else {
         navigate('/');
       }
     } catch (err) {
-      setError(err.message || "Failed to connect to the server.");
+      const msg = err.response?.data?.message || err.response?.data?.detail || err.message || 'Failed to connect to the server.';
+      setError(msg);
     } finally {
       setIsLoading(false);
     }
@@ -241,6 +237,45 @@ export default function Login() {
                   <label><input type="radio" name="gender" value="other" checked={formData.gender === 'other'} onChange={handleChange} required /> Other</label>
                 </div>
               </div>
+
+              {/* Role Selector */}
+              <div className="input-group role-group">
+                <span className="gender-label">Sign up as</span>
+                <div className="role-selector">
+                  <button
+                    type="button"
+                    className={`role-btn ${formData.role === 'customer' ? 'active' : ''}`}
+                    onClick={() => setFormData({ ...formData, role: 'customer' })}
+                  >
+                    <User size={16} />
+                    Customer
+                  </button>
+                  <button
+                    type="button"
+                    className={`role-btn ${formData.role === 'owner' ? 'active' : ''}`}
+                    onClick={() => setFormData({ ...formData, role: 'owner' })}
+                  >
+                    <Store size={16} />
+                    Owner
+                  </button>
+                  <button
+                    type="button"
+                    className={`role-btn ${formData.role === 'warehouse' ? 'active' : ''}`}
+                    onClick={() => setFormData({ ...formData, role: 'warehouse' })}
+                  >
+                    <Warehouse size={16} />
+                    Warehouse
+                  </button>
+                  <button
+                    type="button"
+                    className={`role-btn ${formData.role === 'admin' ? 'active' : ''}`}
+                    onClick={() => setFormData({ ...formData, role: 'admin' })}
+                  >
+                    <Shield size={16} />
+                    Admin
+                  </button>
+                </div>
+              </div>
             </>
           )}
 
@@ -328,7 +363,8 @@ export default function Login() {
                   address: '',
                   phone: '',
                   gender: '',
-                  dob: ''
+                  dob: '',
+                  role: 'customer'
                 });
                 setError('');
               }} 
@@ -504,6 +540,47 @@ export default function Login() {
           accent-color: #F97316;
           width: auto;
           margin: 0;
+        }
+
+        .role-group {
+          display: flex;
+          flex-direction: column;
+          gap: 0.5rem;
+        }
+
+        .role-selector {
+          display: flex;
+          gap: 0.5rem;
+        }
+
+        .role-btn {
+          flex: 1;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 0.4rem;
+          padding: 0.55rem 0.5rem;
+          border: 1.5px solid #e0e0e0;
+          border-radius: 8px;
+          background: #fff;
+          color: #666;
+          font-size: 0.85rem;
+          font-weight: 500;
+          cursor: pointer;
+          transition: all 0.2s;
+          font-family: inherit;
+        }
+
+        .role-btn:hover {
+          border-color: #F97316;
+          color: #F97316;
+        }
+
+        .role-btn.active {
+          background: #FFF7ED;
+          border-color: #F97316;
+          color: #F97316;
+          font-weight: 600;
         }
 
         @media (max-width: 480px) {

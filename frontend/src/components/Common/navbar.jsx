@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
-import { FiSearch, FiHeart, FiShoppingCart, FiUser, FiChevronDown, FiBarChart2 } from 'react-icons/fi'
+import { FiSearch, FiHeart, FiShoppingCart, FiUser, FiChevronDown, FiBarChart2, FiGrid } from 'react-icons/fi'
 
 const navItems = [
   { label: 'Home', path: '/' },
@@ -80,12 +80,24 @@ export default function Navbar({ cartCount = 0, wishlistCount = 0, compareCount 
             </Link>
             <div className="divider" />
             {user ? (
-              <Link to="/profile" className="signin-btn">
-                <div style={{ width: 20, height: 20, borderRadius: '50%', background: '#F97316', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontSize: '0.7rem', fontWeight: 'bold' }}>
-                  {user.firstName?.charAt(0)}
-                </div>
-                <span>{user.firstName}</span>
-              </Link>
+              <>
+                {(user.role === 'owner' || user.role === 'warehouse' || user.role === 'admin') && (
+                  <Link
+                    to={user.role === 'owner' ? '/owner/dashboard' : user.role === 'warehouse' ? '/warehouse/dashboard' : '/admin/dashboard'}
+                    className="action-btn owner-link"
+                    aria-label="Dashboard"
+                  >
+                    <FiGrid size={18} />
+                    <span className="action-label">Dashboard</span>
+                  </Link>
+                )}
+                <Link to="/profile" className="signin-btn">
+                  <div style={{ width: 20, height: 20, borderRadius: '50%', background: '#F97316', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontSize: '0.7rem', fontWeight: 'bold' }}>
+                    {user.firstName?.charAt(0)}
+                  </div>
+                  <span>{user.firstName}</span>
+                </Link>
+              </>
             ) : (
               <Link to="/login" className="signin-btn">
                 <FiUser size={17} />

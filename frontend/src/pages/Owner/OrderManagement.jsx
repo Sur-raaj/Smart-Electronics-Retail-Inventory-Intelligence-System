@@ -21,6 +21,7 @@ export default function OrderManagement() {
   const [searchQuery, setSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedOrder, setSelectedOrder] = useState(null);
+  const [updatingStatus, setUpdatingStatus] = useState(null);
 
   const fetchOrders = useCallback(async () => {
     try {
@@ -55,12 +56,16 @@ export default function OrderManagement() {
   const paged = filtered.slice((currentPage - 1) * perPage, currentPage * perPage);
 
   const handleStatusUpdate = async (orderId, newStatus) => {
+    if (updatingStatus) return;
+    setUpdatingStatus(orderId);
     try {
       await ownerAPI.updateOrderStatus(orderId, newStatus);
       setOrders((prev) => prev.map((o) => o.id === orderId ? { ...o, status: newStatus } : o));
       setSelectedOrder((prev) => prev && prev.id === orderId ? { ...prev, status: newStatus } : prev);
     } catch (err) {
       alert(err.response?.data?.detail || 'Failed to update order status');
+    } finally {
+      setUpdatingStatus(null);
     }
   };
 

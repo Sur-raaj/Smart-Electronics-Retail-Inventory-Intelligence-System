@@ -31,8 +31,13 @@ export default function ProductModal({ isOpen, onClose, onSave, product, categor
   const handleSave = async () => {
     if (!validate()) return;
     setSaving(true);
-    await onSave({ ...form, cost_price: Number(form.cost_price), selling_price: Number(form.selling_price), stock_quantity: Number(form.stock_quantity) });
-    setSaving(false);
+    try {
+      await onSave({ ...form, cost_price: Number(form.cost_price), selling_price: Number(form.selling_price), stock_quantity: Number(form.stock_quantity) });
+    } catch (err) {
+      console.error('Save failed:', err);
+    } finally {
+      setSaving(false);
+    }
   };
 
   if (!isOpen) return null;

@@ -1,8 +1,8 @@
 import { Navigate, Outlet } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import OwnerNavbar from './OwnerNavbar';
+import WarehouseNavbar from './WarehouseNavbar';
 
-export default function OwnerLayout() {
+export default function WarehouseLayout() {
   const { user, initialized } = useAuth();
 
   // Show loading spinner while initializing
@@ -23,25 +23,25 @@ export default function OwnerLayout() {
     );
   }
 
-  // Only allow the owner role
-  if (!user || user.role !== 'owner') {
+  // Only allow the warehouse role
+  if (!user || user.role !== 'warehouse') {
     return <Navigate to="/login" replace />;
   }
 
   return (
-    <div className="owner-layout">
-      <OwnerNavbar />
-      <main className="owner-main-content">
+    <div className="warehouse-layout">
+      <WarehouseNavbar />
+      <main className="warehouse-main-content">
         <Outlet />
       </main>
       <style>{`
-        .owner-layout {
+        .warehouse-layout {
           min-height: 100vh;
           display: flex;
           flex-direction: column;
           background: #F3F4F6;
         }
-        .owner-main-content {
+        .warehouse-main-content {
           flex: 1;
         }
       `}</style>

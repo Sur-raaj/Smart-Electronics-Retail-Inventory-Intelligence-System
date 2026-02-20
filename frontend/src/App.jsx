@@ -21,10 +21,19 @@ import Analytics from './pages/Owner/Analytics'
 import OwnerLayout from './components/Owner/OwnerLayout'
 
 // Warehouse Pages
-import Inventory from './pages/Warehouse/Inventory'
-import StockMovements from './pages/Warehouse/StockMoments'
-import PurchaseOrders from './pages/Warehouse/PurchaseOrders'
-import Warehouses from './pages/Warehouse/Warehouses'
+import WarehouseDashboard from './pages/Warehouse/Dashboard'
+import InventoryManagement from './pages/Warehouse/InventoryManagement'
+import StockMovements from './pages/Warehouse/StockMovements'
+import LowStockAlerts from './pages/Warehouse/LowStockAlerts'
+import WarehouseLayout from './components/warehouse/WarehouseLayout'
+
+// Admin Pages
+import AdminDashboard from './pages/Admin/Dashboard'
+import UserManagement from './pages/Admin/UserManagement'
+import SupplierManagement from './pages/Admin/SupplierManagement'
+import SystemLogs from './pages/Admin/SystemLogs'
+import AnalyticsSummary from './pages/Admin/AnalyticsSummary'
+import AdminLayout from './components/admin/AdminLayout'
 
 function ScrollToTop() {
   const { pathname } = useLocation()
@@ -163,14 +172,17 @@ export default function App() {
   }
 
   const isOwnerRoute = location.pathname.startsWith('/owner');
+  const isWarehouseRoute = location.pathname.startsWith('/warehouse');
+  const isAdminRoute = location.pathname.startsWith('/admin');
+  const hideCustomerChrome = isOwnerRoute || isWarehouseRoute || isAdminRoute;
 
   return (
     <div className="App">
       <ScrollToTop />
-      {!isOwnerRoute && (
+      {!hideCustomerChrome && (
         <Navbar cartCount={cartItems.reduce((acc, item) => acc + item.quantity, 0)} wishlistCount={wishlistItems.length} compareCount={compareItems.length} user={user} />
       )}
-      <main className={isOwnerRoute ? '' : 'main-content'}>
+      <main className={hideCustomerChrome ? '' : 'main-content'}>
         <Routes>
           <Route path="/" element={<Home addToCart={addToCart} toggleWishlist={toggleWishlist} wishlistItems={wishlistItems} toggleCompare={toggleCompare} compareItems={compareItems} />} />
           <Route path="/wishlist" element={<Wishlist items={wishlistItems} removeFromWishlist={removeFromWishlist} addToCart={addToCart} clearWishlist={clearWishlist} moveAllToCart={moveAllToCart} buyNowFromWishlist={buyNowFromWishlist} />} />
@@ -186,16 +198,27 @@ export default function App() {
             <Route path="products" element={<ProductManagement />} />
             <Route path="orders" element={<OrderManagement />} />
             <Route path="analytics" element={<Analytics />} />
+          </Route>
 
-            {/* Warehouse Routes */}
-            <Route path="warehouse/inventory" element={<Inventory />} />
-            <Route path="warehouse/stock-movements" element={<StockMovements />} />
-            <Route path="warehouse/purchase-orders" element={<PurchaseOrders />} />
-            <Route path="warehouse/locations" element={<Warehouses />} />
+          {/* Warehouse Routes — wrapped in WarehouseLayout with its own navbar */}
+          <Route path="/warehouse" element={<WarehouseLayout />}>
+            <Route path="dashboard" element={<WarehouseDashboard />} />
+            <Route path="inventory" element={<InventoryManagement />} />
+            <Route path="stock-movements" element={<StockMovements />} />
+            <Route path="low-stock-alerts" element={<LowStockAlerts />} />
+          </Route>
+
+          {/* Admin Routes — wrapped in AdminLayout with its own navbar */}
+          <Route path="/admin" element={<AdminLayout />}>
+            <Route path="dashboard" element={<AdminDashboard />} />
+            <Route path="users" element={<UserManagement />} />
+            <Route path="suppliers" element={<SupplierManagement />} />
+            <Route path="logs" element={<SystemLogs />} />
+            <Route path="analytics" element={<AnalyticsSummary />} />
           </Route>
         </Routes>
       </main>
-      {!isOwnerRoute && <Footer />}
+      {!hideCustomerChrome && <Footer />}
       <div className="toast-container">
         {toasts.map(t => (
           <div key={t.id} className="toast-message">

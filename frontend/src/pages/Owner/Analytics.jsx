@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback } from 'react';
-import { BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
-import { TrendingUp, TrendingDown, DollarSign, Users, Package, AlertTriangle, Printer, Download, RefreshCw, AlertCircle } from 'lucide-react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import Plot from 'react-plotly.js';
+import { TrendingUp, TrendingDown, DollarSign, Users, Package, AlertTriangle, Printer, Download, RefreshCw, AlertCircle, SlidersHorizontal } from 'lucide-react';
 import { ownerAPI } from '../../services/api';
 
 const fmt = (v) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(v);
@@ -11,6 +11,11 @@ export default function Analytics() {
   const [activeTab, setActiveTab] = useState('revenue');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+
+  // ── Interactive filter states ──
+  const [selectedCategory, setSelectedCategory] = useState('all');
+  const [revenueRange, setRevenueRange] = useState([0, 100]);
+  const [maxRevenueValue, setMaxRevenueValue] = useState(100);
 
   // API data states
   const [summary, setSummary] = useState({ total_revenue: 0, total_profit: 0, total_orders: 0 });
@@ -41,12 +46,19 @@ export default function Analytics() {
       setSummary(summaryRes.data);
       setRevenueTrend(trendRes.data);
       setMonthlyRevenue(monthlyRes.data);
-      setTopProducts(topRes.data);
+      const top = topRes.data;
+      setTopProducts(top);
       setCategoryData(catRes.data);
       setPaymentMethods(payRes.data);
       setStatusDistribution(statusRes.data);
       setLowStockProducts(lowStockRes.data);
       setRecentOrders(ordersRes.data.results || ordersRes.data);
+      // Set slider max from top product revenue
+      if (top.length) {
+        const maxRev = Math.max(...top.map((p) => p.total_revenue));
+        setMaxRevenueValue(maxRev);
+        setRevenueRange([0, maxRev]);
+      }
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to load analytics data. Please try again.');
     } finally {
@@ -59,6 +71,21 @@ export default function Analytics() {
   const totalRevenue = summary.total_revenue || 0;
   const totalProfit = summary.total_profit || 0;
   const totalOrders = summary.total_orders || 0;
+
+  // Derive unique categories for dropdown
+  const categoryOptions = useMemo(() => {
+    const cats = [...new Set(topProducts.map((p) => p.category))].filter(Boolean);
+    return cats;
+  }, [topProducts]);
+
+  // Filtered top products based on dropdown + slider
+  const filteredTopProducts = useMemo(() => {
+    return topProducts.filter((p) => {
+      if (selectedCategory !== 'all' && p.category !== selectedCategory) return false;
+      if (p.total_revenue < revenueRange[0] || p.total_revenue > revenueRange[1]) return false;
+      return true;
+    });
+  }, [topProducts, selectedCategory, revenueRange]);
 
   const tabs = [
     { key: 'revenue', label: 'Revenue' },
@@ -123,50 +150,51 @@ export default function Analytics() {
       {activeTab === 'revenue' && (
         <div className="an-content">
           <div className="an-grid-2">
-            {/* Monthly Revenue Bar Chart */}
+            {/* Monthly Revenue Bar Chart — Plotly */}
             <div className="an-chart-card">
               <h3 className="an-card-title">Monthly Revenue vs Profit</h3>
-              <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={monthlyRevenue} margin={{ top: 10, right: 10, left: 10, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                  <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#9ca3af' }} />
-                  <YAxis tick={{ fontSize: 11, fill: '#9ca3af' }} tickFormatter={fmtShort} />
-                  <Tooltip formatter={(v) => fmt(v)} labelStyle={{ fontWeight: 600, color: '#1e293b' }} contentStyle={{ borderRadius: 10, border: '1px solid #e5e7eb' }} />
-                  <Legend />
-                  <Bar dataKey="revenue" name="Revenue" fill="#3B82F6" radius={[4, 4, 0, 0]} />
-                  <Bar dataKey="profit" name="Profit" fill="#10B981" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
+              <Plot
+                data={[
+                  { x: monthlyRevenue.map((d) => d.month), y: monthlyRevenue.map((d) => d.revenue), type: 'bar', name: 'Revenue', marker: { color: '#3B82F6', cornerradius: 4 }, hovertemplate: '<b>%{x}</b><br>Revenue: ₹%{y:,.0f}<extra></extra>' },
+                  { x: monthlyRevenue.map((d) => d.month), y: monthlyRevenue.map((d) => d.profit), type: 'bar', name: 'Profit', marker: { color: '#10B981', cornerradius: 4 }, hovertemplate: '<b>%{x}</b><br>Profit: ₹%{y:,.0f}<extra></extra>' },
+                ]}
+                layout={{ autosize: true, height: 300, margin: { t: 10, r: 10, b: 40, l: 60 }, paper_bgcolor: 'transparent', plot_bgcolor: 'transparent', font: { family: 'inherit', size: 11, color: '#9ca3af' }, barmode: 'group', xaxis: { showgrid: false }, yaxis: { gridcolor: '#e5e7eb', tickprefix: '₹', separatethousands: true }, legend: { orientation: 'h', y: -0.2, x: 0.5, xanchor: 'center' }, hovermode: 'x unified' }}
+                config={{ responsive: true, displayModeBar: false }}
+                useResizeHandler style={{ width: '100%' }}
+              />
             </div>
 
-            {/* Payment Methods Pie */}
+            {/* Payment Methods Pie — Plotly */}
             <div className="an-chart-card">
               <h3 className="an-card-title">Revenue by Payment Method</h3>
-              <ResponsiveContainer width="100%" height={300}>
-                <PieChart>
-                  <Pie data={paymentMethods} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={100} innerRadius={45} paddingAngle={3}>
-                    {paymentMethods.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
-                  </Pie>
-                  <Tooltip formatter={(v) => fmt(v)} contentStyle={{ borderRadius: 10, border: '1px solid #e5e7eb' }} />
-                  <Legend iconType="circle" iconSize={8} />
-                </PieChart>
-              </ResponsiveContainer>
+              <Plot
+                data={[{
+                  labels: paymentMethods.map((d) => d.name),
+                  values: paymentMethods.map((d) => d.value),
+                  type: 'pie', hole: 0.4,
+                  marker: { colors: COLORS.slice(0, paymentMethods.length) },
+                  hovertemplate: '<b>%{label}</b><br>₹%{value:,.0f}<br>%{percent}<extra></extra>',
+                  textinfo: 'label+percent', textposition: 'outside', textfont: { size: 11 },
+                }]}
+                layout={{ autosize: true, height: 300, margin: { t: 10, r: 10, b: 10, l: 10 }, paper_bgcolor: 'transparent', plot_bgcolor: 'transparent', font: { family: 'inherit', size: 11 }, showlegend: true, legend: { orientation: 'h', y: -0.15, x: 0.5, xanchor: 'center', font: { size: 10, color: '#4b5563' } } }}
+                config={{ responsive: true, displayModeBar: false }}
+                useResizeHandler style={{ width: '100%' }}
+              />
             </div>
           </div>
 
-          {/* Daily Trend */}
+          {/* Daily Trend — Plotly */}
           <div className="an-chart-card">
             <h3 className="an-card-title">Daily Revenue Trend</h3>
-            <ResponsiveContainer width="100%" height={280}>
-              <LineChart data={revenueTrend} margin={{ top: 10, right: 20, left: 10, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                <XAxis dataKey="period" tick={{ fontSize: 11, fill: '#9ca3af' }} tickFormatter={(v) => v.substring(5)} />
-                <YAxis tick={{ fontSize: 11, fill: '#9ca3af' }} tickFormatter={fmtShort} />
-                <Tooltip formatter={(v) => fmt(v)} contentStyle={{ borderRadius: 10, border: '1px solid #e5e7eb' }} />
-                <Line type="monotone" dataKey="revenue" stroke="#3B82F6" strokeWidth={2} dot={false} />
-                <Line type="monotone" dataKey="profit" stroke="#10B981" strokeWidth={2} dot={false} />
-              </LineChart>
-            </ResponsiveContainer>
+            <Plot
+              data={[
+                { x: revenueTrend.map((d) => d.period), y: revenueTrend.map((d) => d.revenue), type: 'scatter', mode: 'lines', name: 'Revenue', line: { color: '#3B82F6', width: 2, shape: 'spline' }, hovertemplate: '<b>%{x}</b><br>Revenue: ₹%{y:,.0f}<extra></extra>' },
+                { x: revenueTrend.map((d) => d.period), y: revenueTrend.map((d) => d.profit), type: 'scatter', mode: 'lines', name: 'Profit', line: { color: '#10B981', width: 2, shape: 'spline' }, hovertemplate: '<b>%{x}</b><br>Profit: ₹%{y:,.0f}<extra></extra>' },
+              ]}
+              layout={{ autosize: true, height: 280, margin: { t: 10, r: 20, b: 40, l: 60 }, paper_bgcolor: 'transparent', plot_bgcolor: 'transparent', font: { family: 'inherit', size: 11, color: '#9ca3af' }, xaxis: { showgrid: false, tickangle: -30 }, yaxis: { gridcolor: '#e5e7eb', tickprefix: '₹', separatethousands: true }, legend: { orientation: 'h', y: -0.22, x: 0.5, xanchor: 'center' }, hovermode: 'x unified' }}
+              config={{ responsive: true, displayModeBar: false }}
+              useResizeHandler style={{ width: '100%' }}
+            />
           </div>
         </div>
       )}
@@ -174,26 +202,56 @@ export default function Analytics() {
       {/* Products Tab */}
       {activeTab === 'products' && (
         <div className="an-content">
-          <div className="an-grid-2">
-            {/* Category Performance */}
-            <div className="an-chart-card">
-              <h3 className="an-card-title">Category Performance</h3>
-              <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={categoryData} layout="vertical" margin={{ top: 0, right: 20, left: 10, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                  <XAxis type="number" tick={{ fontSize: 11, fill: '#9ca3af' }} tickFormatter={fmtShort} />
-                  <YAxis type="category" dataKey="category_name" tick={{ fontSize: 11, fill: '#374151' }} width={100} />
-                  <Tooltip formatter={(v) => fmt(v)} contentStyle={{ borderRadius: 10, border: '1px solid #e5e7eb' }} />
-                  <Bar dataKey="total_revenue" name="Revenue" fill="#F97316" radius={[0, 4, 4, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
+          {/* ── Interactive Filters: Dropdown + Slider ── */}
+          <div className="an-filters-bar">
+            <SlidersHorizontal size={16} color="#6b7280" />
+            <span className="an-filters-label">Filters:</span>
+
+            {/* Category Dropdown */}
+            <div className="an-filter-group">
+              <label className="an-filter-lbl">Category</label>
+              <select className="an-filter-select" value={selectedCategory} onChange={(e) => setSelectedCategory(e.target.value)}>
+                <option value="all">All Categories</option>
+                {categoryOptions.map((c) => <option key={c} value={c}>{c}</option>)}
+              </select>
             </div>
 
-            {/* Top Products */}
+            {/* Revenue Range Slider */}
+            <div className="an-filter-group slider-group">
+              <label className="an-filter-lbl">Min Revenue: {fmtShort(revenueRange[0])}</label>
+              <input type="range" className="an-filter-slider" min={0} max={maxRevenueValue} step={Math.max(1, Math.round(maxRevenueValue / 100))} value={revenueRange[0]} onChange={(e) => setRevenueRange([Number(e.target.value), revenueRange[1]])} />
+            </div>
+            <div className="an-filter-group slider-group">
+              <label className="an-filter-lbl">Max Revenue: {fmtShort(revenueRange[1])}</label>
+              <input type="range" className="an-filter-slider" min={0} max={maxRevenueValue} step={Math.max(1, Math.round(maxRevenueValue / 100))} value={revenueRange[1]} onChange={(e) => setRevenueRange([revenueRange[0], Number(e.target.value)])} />
+            </div>
+
+            <button className="an-filter-reset" onClick={() => { setSelectedCategory('all'); setRevenueRange([0, maxRevenueValue]); }}>Reset</button>
+          </div>
+
+          <div className="an-grid-2">
+            {/* Category Performance — Plotly horizontal bar */}
             <div className="an-chart-card">
-              <h3 className="an-card-title">Top Products by Revenue</h3>
+              <h3 className="an-card-title">Category Performance</h3>
+              <Plot
+                data={[{
+                  y: categoryData.map((d) => d.category_name),
+                  x: categoryData.map((d) => d.total_revenue),
+                  type: 'bar', orientation: 'h', name: 'Revenue',
+                  marker: { color: '#F97316', cornerradius: 4 },
+                  hovertemplate: '<b>%{y}</b><br>Revenue: ₹%{x:,.0f}<extra></extra>',
+                }]}
+                layout={{ autosize: true, height: 300, margin: { t: 0, r: 20, b: 30, l: 110 }, paper_bgcolor: 'transparent', plot_bgcolor: 'transparent', font: { family: 'inherit', size: 11, color: '#374151' }, xaxis: { gridcolor: '#e5e7eb', tickprefix: '₹', separatethousands: true }, yaxis: { autorange: 'reversed' } }}
+                config={{ responsive: true, displayModeBar: false }}
+                useResizeHandler style={{ width: '100%' }}
+              />
+            </div>
+
+            {/* Top Products (filtered) */}
+            <div className="an-chart-card">
+              <h3 className="an-card-title">Top Products by Revenue {selectedCategory !== 'all' ? `(${selectedCategory})` : ''}</h3>
               <div className="an-top-list">
-                {topProducts.slice(0, 5).map((p, i) => (
+                {filteredTopProducts.slice(0, 5).map((p, i) => (
                   <div key={p.product_id} className="an-top-item">
                     <span className="an-top-rank">{i + 1}</span>
                     <div className="an-top-info">
@@ -203,6 +261,7 @@ export default function Analytics() {
                     <span className="an-top-revenue">{fmt(p.total_revenue)}</span>
                   </div>
                 ))}
+                {filteredTopProducts.length === 0 && <p className="an-no-data">No products match current filters</p>}
               </div>
             </div>
           </div>
@@ -248,24 +307,25 @@ export default function Analytics() {
       {activeTab === 'orders' && (
         <div className="an-content">
           <div className="an-grid-2">
-            {/* Order Status Distribution */}
+            {/* Order Status Distribution — Plotly Pie */}
             <div className="an-chart-card">
               <h3 className="an-card-title">Order Status Distribution</h3>
-              <ResponsiveContainer width="100%" height={300}>
-                <PieChart>
-                  <Pie data={statusDistribution} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={100} innerRadius={45} paddingAngle={3}>
-                    {statusDistribution.map((entry, i) => {
-                      const colorMap = { Pending: '#F59E0B', Processing: '#3B82F6', Shipped: '#8B5CF6', Delivered: '#10B981', Cancelled: '#EF4444' };
-                      return <Cell key={i} fill={colorMap[entry.name] || COLORS[i]} />;
-                    })}
-                  </Pie>
-                  <Tooltip contentStyle={{ borderRadius: 10, border: '1px solid #e5e7eb' }} />
-                  <Legend iconType="circle" iconSize={8} />
-                </PieChart>
-              </ResponsiveContainer>
+              <Plot
+                data={[{
+                  labels: statusDistribution.map((d) => d.name),
+                  values: statusDistribution.map((d) => d.value),
+                  type: 'pie', hole: 0.4,
+                  marker: { colors: statusDistribution.map((d) => ({ Pending: '#F59E0B', Processing: '#3B82F6', Shipped: '#8B5CF6', Delivered: '#10B981', Cancelled: '#EF4444' }[d.name] || COLORS[0])) },
+                  hovertemplate: '<b>%{label}</b><br>Count: %{value}<br>%{percent}<extra></extra>',
+                  textinfo: 'label+percent', textposition: 'outside', textfont: { size: 11 },
+                }]}
+                layout={{ autosize: true, height: 300, margin: { t: 10, r: 10, b: 10, l: 10 }, paper_bgcolor: 'transparent', plot_bgcolor: 'transparent', font: { family: 'inherit', size: 11 }, showlegend: true, legend: { orientation: 'h', y: -0.15, x: 0.5, xanchor: 'center', font: { size: 10, color: '#4b5563' } } }}
+                config={{ responsive: true, displayModeBar: false }}
+                useResizeHandler style={{ width: '100%' }}
+              />
             </div>
 
-            {/* Revenue per Order */}
+            {/* Recent Orders */}
             <div className="an-chart-card">
               <h3 className="an-card-title">Orders Summary</h3>
               <div className="an-top-list">
@@ -326,6 +386,46 @@ export default function Analytics() {
         .an-chart-card { background: #fff; padding: 1.5rem; border-radius: 14px; border: 1px solid #e5e7eb; box-shadow: 0 1px 3px rgba(0,0,0,0.04); }
         .an-card-title { font-size: 1rem; font-weight: 700; color: #1e293b; margin: 0 0 1rem; }
 
+        /* Filters Bar */
+        .an-filters-bar {
+          max-width: 1280px; margin: 0 auto 1.25rem;
+          display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;
+          background: #fff; padding: 0.85rem 1.25rem; border-radius: 12px;
+          border: 1px solid #e5e7eb; box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+        }
+        .an-filters-label { font-size: 0.82rem; font-weight: 700; color: #374151; }
+        .an-filter-group { display: flex; flex-direction: column; gap: 0.25rem; }
+        .an-filter-lbl { font-size: 0.7rem; font-weight: 600; color: #6b7280; text-transform: uppercase; letter-spacing: 0.03em; }
+        .an-filter-select {
+          padding: 0.4rem 0.75rem; border-radius: 8px; border: 1.5px solid #d1d5db;
+          font-size: 0.82rem; font-family: inherit; color: #1e293b; background: #fff;
+          cursor: pointer; min-width: 160px;
+        }
+        .an-filter-select:focus { outline: none; border-color: #F97316; box-shadow: 0 0 0 3px rgba(249,115,22,0.1); }
+        .slider-group { min-width: 150px; }
+        .an-filter-slider {
+          width: 100%; height: 6px; border-radius: 3px; -webkit-appearance: none; appearance: none;
+          background: linear-gradient(to right, #F97316, #3B82F6); outline: none; cursor: pointer;
+        }
+        .an-filter-slider::-webkit-slider-thumb {
+          -webkit-appearance: none; width: 18px; height: 18px; border-radius: 50%;
+          background: #fff; border: 2px solid #F97316; cursor: pointer;
+          box-shadow: 0 1px 4px rgba(0,0,0,0.15);
+        }
+        .an-filter-slider::-moz-range-thumb {
+          width: 18px; height: 18px; border-radius: 50%;
+          background: #fff; border: 2px solid #F97316; cursor: pointer;
+          box-shadow: 0 1px 4px rgba(0,0,0,0.15);
+        }
+        .an-filter-reset {
+          padding: 0.4rem 0.85rem; border-radius: 8px; font-size: 0.78rem; font-weight: 600;
+          border: 1.5px solid #d1d5db; background: #fff; color: #6b7280; cursor: pointer;
+          font-family: inherit; transition: all 0.15s; margin-left: auto;
+        }
+        .an-filter-reset:hover { border-color: #F97316; color: #F97316; background: #FFF7ED; }
+
+        .an-no-data { text-align: center; color: #9ca3af; font-size: 0.85rem; padding: 1.5rem 0; }
+
         /* Top List */
         .an-top-list { display: flex; flex-direction: column; gap: 0; }
         .an-top-item { display: flex; align-items: center; gap: 0.75rem; padding: 0.65rem 0; border-bottom: 1px solid #f3f4f6; }
@@ -343,6 +443,7 @@ export default function Analytics() {
           .owner-an { padding: 1.25rem; }
           .owner-an-summary { grid-template-columns: 1fr 1fr; }
           .an-grid-2 { grid-template-columns: 1fr; }
+          .an-filters-bar { flex-direction: column; align-items: stretch; }
         }
         @media (max-width: 540px) {
           .owner-an-summary { grid-template-columns: 1fr; }

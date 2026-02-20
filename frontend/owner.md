@@ -1,1758 +1,1421 @@
-# Backend Integration Guide — Owner Section
+# Backend & Database Integration Guide — Complete System
 
-> **For the Backend Developer**: The frontend Owner section is **fully built** and calls real API endpoints (no mock data). Follow this guide to build the Django backend that powers it.
+> **For the Backend (Django) and MS SQL Developer**: The frontend for all three roles (**Owner**, **Warehouse**, **Customer**) is **fully built**. Every page calls real API endpoints via Axios (no mock data). Follow this guide to build the Django REST Framework backend + MS SQL Server database.
 
 ---
 
-## Current State
+## Table of Contents
+
+1. [System Overview](#1-system-overview)
+2. [Tech Stack & Setup](#2-tech-stack--setup)
+3. [MS SQL Server Database Schema](#3-ms-sql-server-database-schema)
+4. [Django Project Structure](#4-django-project-structure)
+5. [Authentication API](#5-authentication-api)
+6. [Owner API Endpoints](#6-owner-api-endpoints)
+7. [Warehouse API Endpoints](#7-warehouse-api-endpoints)
+8. [Customer API Endpoints](#8-customer-api-endpoints)
+9. [Frontend File Map](#9-frontend-file-map)
+10. [Quick Start Checklist](#10-quick-start-checklist)
+
+---
+
+## 1. System Overview
 
 | Layer | Status |
 |-------|--------|
-| **Frontend** | Done — 4 pages, 8 components, API service with Axios, JWT auth interceptors. All pages call real API endpoints. |
-| **Backend** | Blank Django 6.0.2 project (`page`), SQLite3, no apps, no DRF yet |
+| **Frontend** | Done — React 19 + Vite 7, Plotly charts, 4 role dashboards (Customer, Owner, Warehouse, Admin), JWT auth |
+| **Backend** | Blank Django project (`page`), needs DRF apps, views, serializers |
+| **Database** | Needs MS SQL Server tables (schema below) |
 
-**Frontend API base URL**: `http://localhost:8000/api` (configured in `src/Config/Config.js`)
+**Frontend API base URL**: `http://localhost:8000/api` (configured in `frontend/src/Config/Config.js`)
 
----
+### Roles
 
-## What Was Removed
+| Role | Route Prefix | Layout | Auth Guard |
+|------|-------------|--------|------------|
+| **Customer** | `/` | Navbar + Footer | Optional (some pages need login) |
+| **Owner** | `/owner/*` | OwnerNavbar + OwnerLayout | `role === 'owner'` |
+| **Warehouse** | `/warehouse/*` | WarehouseNavbar + WarehouseLayout | `role === 'warehouse'` |
+| **Admin** | `/admin/*` | AdminNavbar + AdminLayout | `role === 'admin'` |
 
-| Item | Reason |
-|------|--------|
-| `src/data/mockData.js` | Deleted — all pages now fetch from backend API |
-| `src/data/` folder | Deleted — was only used for mock data |
+### Auth Bypass (for testing without backend)
 
----
-
-## Frontend File Structure (Final)
-
-```
-frontend/src/
-├── Config/
-│   └── Config.js                  ← API base URL config
-├── Context/
-│   └── AuthContext.jsx            ← Auth state, login/logout, role management
-├── services/
-│   └── api.js                     ← Axios instance + all API endpoints (ownerAPI + authAPI)
-├── components/Common/
-│   ├── Navbar.jsx                 ← Customer navbar
-│   └── Footer.jsx                 ← Customer footer
-├── components/Owner/
-│   ├── OwnerNavbar.jsx            ← Owner navbar with accent bar, user dropdown
-│   ├── OwnerLayout.jsx            ← Layout wrapper + auth guard for /owner/* routes
-│   ├── SalesOverviewCards.jsx     ← 4 KPI cards (receives data prop from API)
-│   ├── RevenueChart.jsx           ← Revenue + Profit line chart (Recharts, receives data prop)
-│   ├── TopProductsTable.jsx       ← Top 10 products table (receives data prop)
-│   ├── CategoryChart.jsx          ← Category pie chart (Recharts, receives data prop)
-│   ├── ProductModal.jsx           ← Add/Edit product modal
-│   └── OrderDetailsModal.jsx      ← Order details + timeline modal
-├── pages/Owner/
-│   ├── Dashboard.jsx              ← Calls ownerAPI.getSalesOverview/getRevenueTrend/getTopProducts/getCategoryPerformance
-│   ├── ProductManagement.jsx      ← Calls ownerAPI.getAllProducts/createProduct/updateProduct/deleteProduct + getCategories/getSuppliers
-│   ├── OrderManagement.jsx        ← Calls ownerAPI.getAllOrders/updateOrderStatus
-│   └── Analytics.jsx              ← Calls ownerAPI.getSalesOverview/getRevenueTrend/getTopProducts/getCategoryPerformance + getPaymentMethodStats/getOrderStatusStats/getLowStockProducts/getAllOrders
-└── App.jsx                        ← Main routing
-```
+Add `?bypassAuth=owner`, `?bypassAuth=warehouse`, or `?bypassAuth=admin` to any URL. This creates a fake user in context and persists in localStorage.
 
 ---
 
-## STEP 1: Install Required Python Packages
+## 2. Tech Stack & Setup
 
-```bash
-cd backend
-pip install djangorestframework django-cors-headers djangorestframework-simplejwt Pillow django-filter
-pip freeze > requirements.txt
+### Backend Requirements
+
+```
+Django >= 4.2
+djangorestframework >= 3.14
+djangorestframework-simplejwt >= 5.3
+django-cors-headers >= 4.3
+mssql-django >= 1.4          # MS SQL backend for Django
+pyodbc >= 5.0
+Pillow >= 10.0               # for product image uploads
+django-filter >= 23.5        # optional, for query filtering
 ```
 
-Your `requirements.txt` should include at minimum:
-```
-Django==6.0.2
-djangorestframework
-django-cors-headers
-djangorestframework-simplejwt
-Pillow
-django-filter
-```
+### Django settings.py additions
 
----
-
-## STEP 2: Update `page/settings.py`
-
-Add these to **INSTALLED_APPS**:
 ```python
 INSTALLED_APPS = [
-    'django.contrib.admin',
-    'django.contrib.auth',
-    'django.contrib.contenttypes',
-    'django.contrib.sessions',
-    'django.contrib.messages',
-    'django.contrib.staticfiles',
-    # Third-party
+    ...
     'rest_framework',
+    'rest_framework_simplejwt',
     'corsheaders',
-    'django_filters',
-    # Custom apps
-    'accounts',
-    'products',
-    'orders',
-    'analytics',
+    'accounts',        # User & Auth
+    'products',        # Products, Categories, Suppliers
+    'orders',          # Orders, OrderItems
+    'warehouse',       # Inventory, StockMovements, Alerts
+    'analytics',       # Owner analytics views (no models, just aggregation views)
+    'admin_panel',     # Admin panel: user mgmt, supplier mgmt, system logs, analytics summary
 ]
-```
 
-Add CORS middleware (MUST be before CommonMiddleware):
-```python
 MIDDLEWARE = [
-    'django.middleware.security.SecurityMiddleware',
-    'django.contrib.sessions.middleware.SessionMiddleware',
-    'corsheaders.middleware.CorsMiddleware',       # <-- ADD THIS
-    'django.middleware.common.CommonMiddleware',
-    'django.middleware.csrf.CsrfViewMiddleware',
-    'django.contrib.auth.middleware.AuthenticationMiddleware',
-    'django.contrib.messages.middleware.MessageMiddleware',
-    'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'corsheaders.middleware.CorsMiddleware',
+    ...
 ]
-```
 
-Add these settings at the bottom of `settings.py`:
-```python
-# ── CORS ──
-CORS_ALLOWED_ORIGINS = [
-    'http://localhost:5173',   # Vite dev server
-    'http://127.0.0.1:5173',
-]
-CORS_ALLOW_CREDENTIALS = True
+# MS SQL Database
+DATABASES = {
+    'default': {
+        'ENGINE': 'mssql',
+        'NAME': 'electronics_retail_db',
+        'HOST': 'localhost\\SQLEXPRESS',   # adjust to your instance
+        'PORT': '',
+        'USER': 'sa',
+        'PASSWORD': 'your_password',
+        'OPTIONS': {
+            'driver': 'ODBC Driver 17 for SQL Server',
+            'extra_params': 'TrustServerCertificate=yes',
+        },
+    }
+}
 
-# ── REST Framework ──
+# JWT
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
         'rest_framework_simplejwt.authentication.JWTAuthentication',
-        'rest_framework.authentication.SessionAuthentication',
-    ],
-    'DEFAULT_PERMISSION_CLASSES': [
-        'rest_framework.permissions.IsAuthenticated',
     ],
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 20,
-    'DEFAULT_FILTER_BACKENDS': [
-        'django_filters.rest_framework.DjangoFilterBackend',
-        'rest_framework.filters.SearchFilter',
-        'rest_framework.filters.OrderingFilter',
-    ],
 }
 
-# ── JWT ──
 from datetime import timedelta
 SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(hours=1),
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=60),
     'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
+    'ROTATE_REFRESH_TOKENS': True,
 }
 
-# ── Media Files ──
-import os
+# CORS
+CORS_ALLOWED_ORIGINS = ['http://localhost:5173']  # Vite dev server
+
+# Media
 MEDIA_URL = '/media/'
-MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+MEDIA_ROOT = BASE_DIR / 'media'
 ```
 
 ---
 
-## STEP 3: Create Django Apps
+## 3. MS SQL Server Database Schema
 
-```bash
-cd backend
-python manage.py startapp products
-python manage.py startapp orders
-python manage.py startapp analytics
-python manage.py startapp accounts
+### 3.1 Users / Auth
+
+```sql
+CREATE TABLE users (
+    id              INT IDENTITY(1,1) PRIMARY KEY,
+    username        NVARCHAR(150) UNIQUE NOT NULL,
+    email           NVARCHAR(254) UNIQUE NOT NULL,
+    password_hash   NVARCHAR(256) NOT NULL,
+    first_name      NVARCHAR(100) DEFAULT '',
+    last_name       NVARCHAR(100) DEFAULT '',
+    phone           NVARCHAR(20) DEFAULT '',
+    address         NVARCHAR(500) DEFAULT '',
+    dob             DATE NULL,
+    gender          NVARCHAR(10) DEFAULT '',   -- 'male' | 'female' | 'other'
+    role            NVARCHAR(20) DEFAULT 'customer',   -- 'customer' | 'owner' | 'warehouse' | 'admin'
+    is_active       BIT DEFAULT 1,
+    date_joined     DATETIME2 DEFAULT GETDATE(),
+    last_login      DATETIME2 NULL
+);
+-- CONSTRAINT: role IN ('customer', 'owner', 'warehouse', 'admin')
+```
+
+### 3.2 Categories
+
+```sql
+CREATE TABLE categories (
+    id              INT IDENTITY(1,1) PRIMARY KEY,
+    name            NVARCHAR(100) UNIQUE NOT NULL,
+    description     NVARCHAR(500) DEFAULT '',
+    image_url       NVARCHAR(500) NULL,
+    is_active       BIT DEFAULT 1,
+    created_at      DATETIME2 DEFAULT GETDATE()
+);
+```
+
+### 3.3 Suppliers
+
+```sql
+CREATE TABLE suppliers (
+    id              INT IDENTITY(1,1) PRIMARY KEY,
+    name            NVARCHAR(200) NOT NULL,
+    contact_person  NVARCHAR(200) DEFAULT '',
+    email           NVARCHAR(254) DEFAULT '',
+    phone           NVARCHAR(20) DEFAULT '',
+    address         NVARCHAR(500) DEFAULT '',
+    is_active       BIT DEFAULT 1,
+    created_at      DATETIME2 DEFAULT GETDATE()
+);
+```
+
+### 3.4 Products
+
+```sql
+CREATE TABLE products (
+    id              INT IDENTITY(1,1) PRIMARY KEY,
+    name            NVARCHAR(300) NOT NULL,
+    description     NVARCHAR(MAX) DEFAULT '',
+    sku             NVARCHAR(50) UNIQUE NULL,
+    brand           NVARCHAR(100) DEFAULT '',
+    cost_price      DECIMAL(12,2) NOT NULL DEFAULT 0,
+    selling_price   DECIMAL(12,2) NOT NULL DEFAULT 0,
+    stock_quantity  INT NOT NULL DEFAULT 0,
+    reorder_level   INT DEFAULT 10,
+    category_id     INT REFERENCES categories(id) ON DELETE SET NULL,
+    supplier_id     INT REFERENCES suppliers(id) ON DELETE SET NULL,
+    owner_name      NVARCHAR(200) DEFAULT '',       -- store/brand owner
+    image_url       NVARCHAR(500) NULL,
+    status          NVARCHAR(20) DEFAULT 'Active',   -- 'Active' | 'Inactive'
+    location        NVARCHAR(100) DEFAULT '',        -- warehouse location (aisle/shelf)
+    weight          DECIMAL(8,2) NULL,
+    warranty_months INT DEFAULT 0,
+    created_at      DATETIME2 DEFAULT GETDATE(),
+    updated_at      DATETIME2 DEFAULT GETDATE()
+);
+```
+
+### 3.5 Orders
+
+```sql
+CREATE TABLE orders (
+    id              INT IDENTITY(1,1) PRIMARY KEY,
+    user_id         INT REFERENCES users(id) ON DELETE CASCADE,
+    order_date      DATETIME2 DEFAULT GETDATE(),
+    status          NVARCHAR(20) DEFAULT 'Pending',
+        -- 'Pending' | 'Processing' | 'Shipped' | 'Delivered' | 'Cancelled'
+    subtotal        DECIMAL(12,2) DEFAULT 0,
+    tax_amount      DECIMAL(12,2) DEFAULT 0,
+    shipping_fee    DECIMAL(12,2) DEFAULT 0,
+    discount        DECIMAL(12,2) DEFAULT 0,
+    grand_total     DECIMAL(12,2) DEFAULT 0,
+    payment_method  NVARCHAR(50) DEFAULT 'COD',
+        -- 'COD' | 'Credit Card' | 'Debit Card' | 'UPI' | 'Net Banking' | 'Wallet'
+    payment_status  NVARCHAR(20) DEFAULT 'Pending',
+        -- 'Pending' | 'Completed' | 'Refunded'
+    shipping_address NVARCHAR(500) DEFAULT '',
+    notes           NVARCHAR(500) DEFAULT '',
+    updated_at      DATETIME2 DEFAULT GETDATE()
+);
+```
+
+### 3.6 Order Items
+
+```sql
+CREATE TABLE order_items (
+    id              INT IDENTITY(1,1) PRIMARY KEY,
+    order_id        INT REFERENCES orders(id) ON DELETE CASCADE,
+    product_id      INT REFERENCES products(id) ON DELETE SET NULL,
+    product_name    NVARCHAR(300) NOT NULL,          -- snapshot
+    quantity        INT NOT NULL DEFAULT 1,
+    unit_price      DECIMAL(12,2) NOT NULL,
+    total_price     DECIMAL(12,2) NOT NULL
+);
+```
+
+### 3.7 Cart
+
+```sql
+CREATE TABLE cart_items (
+    id              INT IDENTITY(1,1) PRIMARY KEY,
+    user_id         INT REFERENCES users(id) ON DELETE CASCADE,
+    product_id      INT REFERENCES products(id) ON DELETE CASCADE,
+    quantity        INT NOT NULL DEFAULT 1,
+    added_at        DATETIME2 DEFAULT GETDATE(),
+    UNIQUE(user_id, product_id)
+);
+```
+
+### 3.8 Wishlist
+
+```sql
+CREATE TABLE wishlist_items (
+    id              INT IDENTITY(1,1) PRIMARY KEY,
+    user_id         INT REFERENCES users(id) ON DELETE CASCADE,
+    product_id      INT REFERENCES products(id) ON DELETE CASCADE,
+    added_at        DATETIME2 DEFAULT GETDATE(),
+    UNIQUE(user_id, product_id)
+);
+```
+
+### 3.9 Reviews
+
+```sql
+CREATE TABLE reviews (
+    id              INT IDENTITY(1,1) PRIMARY KEY,
+    product_id      INT REFERENCES products(id) ON DELETE CASCADE,
+    user_id         INT REFERENCES users(id) ON DELETE CASCADE,
+    rating          INT NOT NULL CHECK (rating BETWEEN 1 AND 5),
+    comment         NVARCHAR(MAX) DEFAULT '',
+    created_at      DATETIME2 DEFAULT GETDATE()
+);
+```
+
+### 3.10 Stock Movements (Warehouse)
+
+```sql
+CREATE TABLE stock_movements (
+    id              INT IDENTITY(1,1) PRIMARY KEY,
+    product_id      INT REFERENCES products(id) ON DELETE CASCADE,
+    type            NVARCHAR(20) NOT NULL,
+        -- 'stock_in' | 'stock_out' | 'returned' | 'damaged' | 'transferred'
+    quantity        INT NOT NULL,
+    reason          NVARCHAR(500) DEFAULT '',
+    reference       NVARCHAR(100) DEFAULT '',        -- PO number, invoice, etc.
+    performed_by    NVARCHAR(200) DEFAULT '',
+    date            DATETIME2 DEFAULT GETDATE()
+);
+```
+
+### 3.11 Low Stock Alerts (Warehouse)
+
+```sql
+CREATE TABLE stock_alerts (
+    id              INT IDENTITY(1,1) PRIMARY KEY,
+    product_id      INT REFERENCES products(id) ON DELETE CASCADE,
+    severity        NVARCHAR(20) DEFAULT 'warning',  -- 'critical' | 'warning' | 'info'
+    status          NVARCHAR(20) DEFAULT 'active',   -- 'active' | 'resolved' | 'dismissed'
+    current_stock   INT DEFAULT 0,
+    threshold       INT DEFAULT 10,
+    message         NVARCHAR(500) DEFAULT '',
+    created_at      DATETIME2 DEFAULT GETDATE(),
+    resolved_at     DATETIME2 NULL
+);
 ```
 
 ---
 
-## STEP 4: Define Models
+## 4. Django Project Structure
 
-### `products/models.py`
-
-```python
-from django.db import models
-
-class Category(models.Model):
-    name = models.CharField(max_length=100, unique=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        verbose_name_plural = 'Categories'
-        ordering = ['name']
-
-    def __str__(self):
-        return self.name
-
-
-class Supplier(models.Model):
-    name = models.CharField(max_length=200)
-    contact_email = models.EmailField(blank=True, null=True)
-    contact_phone = models.CharField(max_length=20, blank=True, null=True)
-    rating = models.DecimalField(max_digits=3, decimal_places=1, default=0)
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    def __str__(self):
-        return self.name
-
-
-class Product(models.Model):
-    STATUS_CHOICES = [
-        ('Active', 'Active'),
-        ('Discontinued', 'Discontinued'),
-        ('Out of Stock', 'Out of Stock'),
-    ]
-
-    name = models.CharField(max_length=300)
-    category = models.ForeignKey(Category, on_delete=models.CASCADE, related_name='products')
-    brand = models.CharField(max_length=100)
-    model_number = models.CharField(max_length=100, blank=True, null=True)
-    description = models.TextField(blank=True, null=True)
-    specifications = models.TextField(blank=True, null=True)
-    cost_price = models.DecimalField(max_digits=12, decimal_places=2)
-    selling_price = models.DecimalField(max_digits=12, decimal_places=2)
-    stock_quantity = models.IntegerField(default=0)
-    reorder_level = models.IntegerField(default=10)
-    supplier = models.ForeignKey(Supplier, on_delete=models.SET_NULL, null=True, blank=True, related_name='products')
-    warranty_months = models.IntegerField(default=12, blank=True, null=True)
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='Active')
-    image_url = models.URLField(blank=True, null=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        ordering = ['-created_at']
-
-    def __str__(self):
-        return f'{self.name} ({self.brand})'
+```
+backend/
+├── manage.py
+├── requirements.txt
+├── page/                    # main project
+│   ├── settings.py
+│   ├── urls.py              # include all app urls under /api/
+│   └── wsgi.py
+├── accounts/                # User model, auth views
+│   ├── models.py            # CustomUser(AbstractUser) with role field
+│   ├── serializers.py       # UserSerializer, LoginSerializer, RegisterSerializer
+│   ├── views.py             # LoginView, RegisterView, ProfileView
+│   └── urls.py              # /api/auth/*
+├── products/                # Products, Categories, Suppliers
+│   ├── models.py            # Product, Category, Supplier
+│   ├── serializers.py
+│   ├── views.py             # ModelViewSets
+│   └── urls.py              # /api/products/*, /api/categories/*, /api/suppliers/*
+├── orders/                  # Orders, OrderItems, Cart, Wishlist
+│   ├── models.py            # Order, OrderItem, CartItem, WishlistItem, Review
+│   ├── serializers.py
+│   ├── views.py
+│   └── urls.py              # /api/orders/*, /api/cart/*, /api/wishlist/*
+├── warehouse/               # Warehouse-specific views
+│   ├── models.py            # StockMovement, StockAlert
+│   ├── serializers.py
+│   ├── views.py
+│   └── urls.py              # /api/warehouse/*
+└── analytics/               # Owner analytics (no models, aggregation queries)
+    ├── views.py             # Analytics views with SQL/ORM aggregation
+    └── urls.py              # /api/analytics/*
+└── admin_panel/             # Admin panel (user mgmt, supplier mgmt, logs, analytics)
+    ├── models.py            # SystemLog
+    ├── serializers.py
+    ├── views.py             # Admin-only views
+    ├── permissions.py       # IsAdminRole permission class
+    └── urls.py              # /api/admin/*
 ```
 
-### `orders/models.py`
-
-```python
-from django.db import models
-from django.contrib.auth.models import User
-from products.models import Product
-
-class Order(models.Model):
-    STATUS_CHOICES = [
-        ('Pending', 'Pending'),
-        ('Processing', 'Processing'),
-        ('Shipped', 'Shipped'),
-        ('Delivered', 'Delivered'),
-        ('Cancelled', 'Cancelled'),
-    ]
-    PAYMENT_STATUS_CHOICES = [
-        ('Pending', 'Pending'),
-        ('Completed', 'Completed'),
-        ('Failed', 'Failed'),
-        ('Refunded', 'Refunded'),
-    ]
-
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='orders')
-    order_date = models.DateTimeField(auto_now_add=True)
-    total_amount = models.DecimalField(max_digits=12, decimal_places=2)
-    tax_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
-    shipping_cost = models.DecimalField(max_digits=10, decimal_places=2, default=0)
-    discount_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
-    grand_total = models.DecimalField(max_digits=12, decimal_places=2)
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='Pending')
-    payment_method = models.CharField(max_length=50)
-    payment_status = models.CharField(max_length=20, choices=PAYMENT_STATUS_CHOICES, default='Pending')
-    tracking_number = models.CharField(max_length=100, blank=True, null=True)
-    shipping_address = models.TextField()
-
-    class Meta:
-        ordering = ['-order_date']
-
-    def __str__(self):
-        return f'Order #{self.pk} - {self.user.get_full_name()}'
-
-    @property
-    def user_name(self):
-        return self.user.get_full_name() or self.user.username
-
-    @property
-    def user_email(self):
-        return self.user.email
-
-    @property
-    def items_count(self):
-        return self.items.count()
-
-
-class OrderItem(models.Model):
-    order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name='items')
-    product = models.ForeignKey(Product, on_delete=models.CASCADE)
-    quantity = models.IntegerField()
-    unit_price = models.DecimalField(max_digits=12, decimal_places=2)
-    subtotal = models.DecimalField(max_digits=12, decimal_places=2)
-
-    def __str__(self):
-        return f'{self.product.name} x{self.quantity}'
-```
-
-### `accounts/models.py`
-
-```python
-from django.db import models
-from django.contrib.auth.models import User
-
-class Profile(models.Model):
-    ROLE_CHOICES = [
-        ('customer', 'Customer'),
-        ('owner', 'Owner'),
-    ]
-    GENDER_CHOICES = [
-        ('male', 'Male'),
-        ('female', 'Female'),
-        ('other', 'Other'),
-    ]
-
-    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
-    role = models.CharField(max_length=20, choices=ROLE_CHOICES, default='customer')
-    phone = models.CharField(max_length=15, blank=True, null=True)
-    address = models.TextField(blank=True, null=True)
-    gender = models.CharField(max_length=10, choices=GENDER_CHOICES, blank=True, null=True)
-    dob = models.DateField(blank=True, null=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    def __str__(self):
-        return f'{self.user.username} ({self.role})'
-```
-
-### `accounts/serializers.py`
-
-```python
-from rest_framework import serializers
-from django.contrib.auth.models import User
-from .models import Profile
-import re
-from datetime import date
-
-class SignupSerializer(serializers.Serializer):
-    firstName = serializers.CharField(max_length=30)
-    lastName = serializers.CharField(max_length=30)
-    email = serializers.EmailField()
-    password = serializers.CharField(write_only=True)
-    confirmPassword = serializers.CharField(write_only=True)
-    phone = serializers.CharField(max_length=15)
-    address = serializers.CharField()
-    gender = serializers.ChoiceField(choices=['male', 'female', 'other'])
-    dob = serializers.DateField()
-
-    def validate_email(self, value):
-        value = value.lower().strip()
-        if not re.search(r'(@gmail\.com|\.edu\.np)$', value, re.IGNORECASE):
-            raise serializers.ValidationError('Email must end with @gmail.com or .edu.np')
-        if User.objects.filter(email=value).exists():
-            raise serializers.ValidationError('An account with this email already exists')
-        return value
-
-    def validate_password(self, value):
-        if not re.match(r'^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z\d]).{8,}$', value):
-            raise serializers.ValidationError(
-                'Password must be 8+ chars with uppercase, lowercase, number, and special character'
-            )
-        return value
-
-    def validate_phone(self, value):
-        if not re.match(r'^\d{10}$', value):
-            raise serializers.ValidationError('Phone number must be exactly 10 digits')
-        return value
-
-    def validate_dob(self, value):
-        today = date.today()
-        age = today.year - value.year - ((today.month, today.day) < (value.month, value.day))
-        if age < 16:
-            raise serializers.ValidationError('You must be at least 16 years old to sign up')
-        return value
-
-    def validate(self, data):
-        if data['password'] != data['confirmPassword']:
-            raise serializers.ValidationError({'confirmPassword': 'Passwords do not match'})
-        return data
-
-    def create(self, validated_data):
-        user = User.objects.create_user(
-            username=validated_data['email'],  # Use email as username
-            email=validated_data['email'],
-            password=validated_data['password'],
-            first_name=validated_data['firstName'],
-            last_name=validated_data['lastName'],
-        )
-        Profile.objects.create(
-            user=user,
-            role='customer',
-            phone=validated_data['phone'],
-            address=validated_data['address'],
-            gender=validated_data['gender'],
-            dob=validated_data['dob'],
-        )
-        return user
-
-
-class LoginSerializer(serializers.Serializer):
-    email = serializers.EmailField()
-    password = serializers.CharField()
-
-
-class UserProfileSerializer(serializers.Serializer):
-    """Returns user data in the format the frontend expects (camelCase)."""
-    id = serializers.IntegerField(source='user.id')
-    firstName = serializers.CharField(source='user.first_name')
-    lastName = serializers.CharField(source='user.last_name')
-    email = serializers.EmailField(source='user.email')
-    phone = serializers.CharField()
-    address = serializers.CharField()
-    gender = serializers.CharField()
-    dob = serializers.DateField()
-    role = serializers.CharField()
-    createdAt = serializers.DateTimeField(source='created_at')
-```
-
-### `accounts/views.py`
-
-```python
-from rest_framework.views import APIView
-from rest_framework.response import Response
-from rest_framework import status, permissions
-from rest_framework_simplejwt.tokens import RefreshToken
-from django.contrib.auth import authenticate
-from django.contrib.auth.models import User
-from .serializers import SignupSerializer, LoginSerializer, UserProfileSerializer
-from .models import Profile
-
-
-class SignupView(APIView):
-    permission_classes = [permissions.AllowAny]
-
-    def post(self, request):
-        serializer = SignupSerializer(data=request.data)
-        if not serializer.is_valid():
-            # Return first error message
-            first_error = next(iter(serializer.errors.values()))[0]
-            return Response(
-                {'message': str(first_error)},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        user = serializer.save()
-        tokens = RefreshToken.for_user(user)
-        profile = user.profile
-        return Response({
-            'user': UserProfileSerializer(profile).data,
-            'access': str(tokens.access_token),
-            'refresh': str(tokens),
-            'message': 'Account created successfully',
-        }, status=status.HTTP_201_CREATED)
-
-
-class LoginView(APIView):
-    permission_classes = [permissions.AllowAny]
-
-    def post(self, request):
-        serializer = LoginSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-
-        email = serializer.validated_data['email'].lower().strip()
-        password = serializer.validated_data['password']
-
-        # Find user by email
-        try:
-            user_obj = User.objects.get(email=email)
-        except User.DoesNotExist:
-            return Response(
-                {'message': 'Invalid credentials'},
-                status=status.HTTP_401_UNAUTHORIZED
-            )
-
-        user = authenticate(username=user_obj.username, password=password)
-        if user is None:
-            return Response(
-                {'message': 'Invalid credentials'},
-                status=status.HTTP_401_UNAUTHORIZED
-            )
-
-        tokens = RefreshToken.for_user(user)
-        profile = user.profile
-        return Response({
-            'user': UserProfileSerializer(profile).data,
-            'access': str(tokens.access_token),
-            'refresh': str(tokens),
-        })
-
-
-class ProfileView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
-
-    def get(self, request):
-        profile = request.user.profile
-        return Response(UserProfileSerializer(profile).data)
-```
-
-### `accounts/urls.py`
-
-```python
-from django.urls import path
-from .views import SignupView, LoginView, ProfileView
-
-urlpatterns = [
-    path('login/', LoginView.as_view(), name='auth_login'),
-    path('signup/', SignupView.as_view(), name='auth_signup'),
-    path('profile/', ProfileView.as_view(), name='auth_profile'),
-]
-```
-
----
-
-## STEP 5: Create Serializers
-
-### `products/serializers.py`
-
-```python
-from rest_framework import serializers
-from .models import Category, Supplier, Product
-
-class CategorySerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Category
-        fields = ['id', 'name']
-
-
-class SupplierSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Supplier
-        fields = ['id', 'name', 'rating']
-
-
-class ProductSerializer(serializers.ModelSerializer):
-    category_name = serializers.CharField(source='category.name', read_only=True)
-    supplier_name = serializers.CharField(source='supplier.name', read_only=True, default=None)
-
-    class Meta:
-        model = Product
-        fields = [
-            'id', 'name', 'category', 'category_name', 'brand',
-            'model_number', 'description', 'specifications',
-            'cost_price', 'selling_price', 'stock_quantity',
-            'reorder_level', 'supplier', 'supplier_name',
-            'warranty_months', 'status', 'image_url',
-            'created_at', 'updated_at',
-        ]
-```
-
-### `orders/serializers.py`
-
-```python
-from rest_framework import serializers
-from .models import Order, OrderItem
-
-class OrderItemSerializer(serializers.ModelSerializer):
-    product_name = serializers.CharField(source='product.name', read_only=True)
-
-    class Meta:
-        model = OrderItem
-        fields = ['id', 'product', 'product_name', 'quantity', 'unit_price', 'subtotal']
-
-
-class OrderListSerializer(serializers.ModelSerializer):
-    user_name = serializers.CharField(read_only=True)
-    user_email = serializers.CharField(read_only=True)
-    items_count = serializers.IntegerField(read_only=True)
-
-    class Meta:
-        model = Order
-        fields = [
-            'id', 'user', 'user_name', 'user_email',
-            'order_date', 'items_count', 'total_amount',
-            'tax_amount', 'shipping_cost', 'discount_amount',
-            'grand_total', 'status', 'payment_method',
-            'payment_status', 'tracking_number', 'shipping_address',
-        ]
-
-
-class OrderDetailSerializer(OrderListSerializer):
-    items = OrderItemSerializer(many=True, read_only=True)
-
-    class Meta(OrderListSerializer.Meta):
-        fields = OrderListSerializer.Meta.fields + ['items']
-```
-
----
-
-## STEP 6: Create Views
-
-### `products/views.py`
-
-```python
-from rest_framework import viewsets, permissions
-from django_filters.rest_framework import DjangoFilterBackend
-from rest_framework.filters import SearchFilter, OrderingFilter
-from .models import Category, Supplier, Product
-from .serializers import CategorySerializer, SupplierSerializer, ProductSerializer
-
-
-class CategoryViewSet(viewsets.ModelViewSet):
-    queryset = Category.objects.all()
-    serializer_class = CategorySerializer
-    permission_classes = [permissions.IsAuthenticated]
-    pagination_class = None  # Return all categories (small list)
-
-
-class SupplierViewSet(viewsets.ModelViewSet):
-    queryset = Supplier.objects.all()
-    serializer_class = SupplierSerializer
-    permission_classes = [permissions.IsAuthenticated]
-    pagination_class = None
-
-
-class ProductViewSet(viewsets.ModelViewSet):
-    queryset = Product.objects.select_related('category', 'supplier').all()
-    serializer_class = ProductSerializer
-    permission_classes = [permissions.IsAuthenticated]
-    filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
-    filterset_fields = ['category', 'status', 'brand']
-    search_fields = ['name', 'brand', 'description']
-    ordering_fields = ['name', 'selling_price', 'stock_quantity', 'created_at']
-```
-
-### `orders/views.py`
-
-```python
-from rest_framework import viewsets, permissions, status
-from rest_framework.response import Response
-from django_filters.rest_framework import DjangoFilterBackend
-from rest_framework.filters import SearchFilter, OrderingFilter
-from .models import Order
-from .serializers import OrderListSerializer, OrderDetailSerializer
-
-
-class OrderViewSet(viewsets.ModelViewSet):
-    queryset = Order.objects.select_related('user').all()
-    permission_classes = [permissions.IsAuthenticated]
-    filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
-    filterset_fields = ['status', 'payment_status', 'payment_method']
-    search_fields = ['id', 'user__first_name', 'user__last_name', 'user__email']
-    ordering_fields = ['order_date', 'grand_total']
-
-    def get_serializer_class(self):
-        if self.action == 'retrieve':
-            return OrderDetailSerializer
-        return OrderListSerializer
-
-    def partial_update(self, request, *args, **kwargs):
-        """Handle status updates via PATCH"""
-        order = self.get_object()
-        new_status = request.data.get('status')
-        if new_status:
-            order.status = new_status
-            order.save()
-            return Response(OrderListSerializer(order).data)
-        return super().partial_update(request, *args, **kwargs)
-```
-
-### `analytics/views.py`
-
-```python
-from rest_framework.views import APIView
-from rest_framework.response import Response
-from rest_framework import permissions
-from django.db.models import Sum, Count, Avg, F, Value
-from django.db.models.functions import TruncDate, TruncMonth
-from datetime import datetime, timedelta
-from orders.models import Order, OrderItem
-from products.models import Product, Category
-
-
-class SalesOverviewView(APIView):
-    """
-    GET /api/analytics/sales-overview/
-    Query params: start_date, end_date (YYYY-MM-DD)
-
-    Returns the KPI object the frontend SalesOverviewCards component expects.
-    """
-    permission_classes = [permissions.IsAuthenticated]
-
-    def get(self, request):
-        start = request.query_params.get('start_date')
-        end = request.query_params.get('end_date')
-
-        orders = Order.objects.exclude(status='Cancelled')
-        if start:
-            orders = orders.filter(order_date__date__gte=start)
-        if end:
-            orders = orders.filter(order_date__date__lte=end)
-
-        metrics = orders.aggregate(
-            total_revenue=Sum('grand_total'),
-            total_orders=Count('id'),
-            avg_order_value=Avg('grand_total'),
-            total_customers=Count('user', distinct=True),
-        )
-
-        items_agg = OrderItem.objects.filter(order__in=orders).aggregate(
-            total_items_sold=Sum('quantity'),
-        )
-
-        # Calculate profit (revenue - cost)
-        total_revenue = float(metrics['total_revenue'] or 0)
-        item_cost = OrderItem.objects.filter(order__in=orders).aggregate(
-            total_cost=Sum(F('quantity') * F('product__cost_price'))
-        )
-        total_cost = float(item_cost['total_cost'] or 0)
-        total_profit = total_revenue - total_cost
-        profit_margin = (total_profit / total_revenue * 100) if total_revenue > 0 else 0
-
-        return Response({
-            'total_revenue': round(total_revenue, 2),
-            'total_profit': round(total_profit, 2),
-            'total_items_sold': items_agg['total_items_sold'] or 0,
-            'total_orders': metrics['total_orders'] or 0,
-            'avg_order_value': round(float(metrics['avg_order_value'] or 0), 2),
-            'profit_margin': round(profit_margin, 1),
-            'revenue_change': 0,   # Implement comparison with previous period
-            'profit_change': 0,
-            'total_customers': metrics['total_customers'] or 0,
-            'period_start': start,
-            'period_end': end,
-        })
-
-
-class RevenueTrendView(APIView):
-    """
-    GET /api/analytics/revenue-trend/
-    Query params: start_date, end_date, period (daily|monthly)
-
-    Returns array the frontend RevenueChart expects.
-    """
-    permission_classes = [permissions.IsAuthenticated]
-
-    def get(self, request):
-        start = request.query_params.get('start_date')
-        end = request.query_params.get('end_date')
-        period = request.query_params.get('period', 'daily')
-
-        orders = Order.objects.exclude(status='Cancelled')
-        if start:
-            orders = orders.filter(order_date__date__gte=start)
-        if end:
-            orders = orders.filter(order_date__date__lte=end)
-
-        trunc_fn = TruncDate if period == 'daily' else TruncMonth
-
-        data = (
-            orders.annotate(p=trunc_fn('order_date'))
-            .values('p')
-            .annotate(
-                revenue=Sum('grand_total'),
-                order_count=Count('id'),
-            )
-            .order_by('p')
-        )
-
-        result = []
-        for d in data:
-            # Estimate profit as 30% of revenue (improve later with actual cost calc)
-            rev = float(d['revenue'] or 0)
-            result.append({
-                'period': d['p'].isoformat() if d['p'] else '',
-                'revenue': round(rev, 2),
-                'profit': round(rev * 0.3, 2),
-                'order_count': d['order_count'],
-            })
-
-        return Response(result)
-
-
-class TopProductsView(APIView):
-    """
-    GET /api/analytics/top-products/
-    Query params: start_date, end_date, limit (default 10)
-
-    Returns array the frontend TopProductsTable expects.
-    """
-    permission_classes = [permissions.IsAuthenticated]
-
-    def get(self, request):
-        start = request.query_params.get('start_date')
-        end = request.query_params.get('end_date')
-        limit = int(request.query_params.get('limit', 10))
-
-        items = OrderItem.objects.filter(order__status__in=['Processing', 'Shipped', 'Delivered'])
-        if start:
-            items = items.filter(order__order_date__date__gte=start)
-        if end:
-            items = items.filter(order__order_date__date__lte=end)
-
-        top = (
-            items.values('product')
-            .annotate(
-                total_quantity_sold=Sum('quantity'),
-                total_revenue=Sum('subtotal'),
-                total_cost=Sum(F('quantity') * F('product__cost_price')),
-            )
-            .order_by('-total_revenue')[:limit]
-        )
-
-        result = []
-        for rank, item in enumerate(top, 1):
-            product = Product.objects.select_related('category').get(pk=item['product'])
-            revenue = float(item['total_revenue'] or 0)
-            cost = float(item['total_cost'] or 0)
-            profit = revenue - cost
-            margin = (profit / revenue * 100) if revenue > 0 else 0
-            result.append({
-                'rank': rank,
-                'product_id': product.pk,
-                'name': product.name,
-                'brand': product.brand,
-                'category': product.category.name,
-                'total_quantity_sold': item['total_quantity_sold'],
-                'total_revenue': round(revenue, 2),
-                'total_profit': round(profit, 2),
-                'profit_margin': round(margin, 1),
-            })
-
-        return Response(result)
-
-
-class CategoryPerformanceView(APIView):
-    """
-    GET /api/analytics/category-performance/
-    Query params: start_date, end_date
-
-    Returns array the frontend CategoryChart expects.
-    """
-    permission_classes = [permissions.IsAuthenticated]
-
-    def get(self, request):
-        start = request.query_params.get('start_date')
-        end = request.query_params.get('end_date')
-
-        items = OrderItem.objects.filter(order__status__in=['Processing', 'Shipped', 'Delivered'])
-        if start:
-            items = items.filter(order__order_date__date__gte=start)
-        if end:
-            items = items.filter(order__order_date__date__lte=end)
-
-        cats = (
-            items.values(
-                category_id=F('product__category__id'),
-                category_name=F('product__category__name'),
-            )
-            .annotate(
-                total_revenue=Sum('subtotal'),
-                product_count=Count('product', distinct=True),
-            )
-            .order_by('-total_revenue')
-        )
-
-        grand = sum(float(c['total_revenue'] or 0) for c in cats)
-
-        result = []
-        for c in cats:
-            rev = float(c['total_revenue'] or 0)
-            result.append({
-                'category_id': c['category_id'],
-                'category_name': c['category_name'],
-                'product_count': c['product_count'],
-                'total_revenue': round(rev, 2),
-                'percentage': round((rev / grand * 100) if grand > 0 else 0, 1),
-            })
-
-        return Response(result)
-```
-
----
-
-## STEP 7: Configure URLs
-
-### `products/urls.py` (create this file)
-
-```python
-from django.urls import path, include
-from rest_framework.routers import DefaultRouter
-from .views import CategoryViewSet, SupplierViewSet, ProductViewSet
-
-router = DefaultRouter()
-router.register('products', ProductViewSet)
-router.register('categories', CategoryViewSet)
-router.register('suppliers', SupplierViewSet)
-
-urlpatterns = [
-    path('', include(router.urls)),
-]
-```
-
-### `orders/urls.py` (create this file)
-
-```python
-from django.urls import path, include
-from rest_framework.routers import DefaultRouter
-from .views import OrderViewSet
-
-router = DefaultRouter()
-router.register('orders', OrderViewSet)
-
-urlpatterns = [
-    path('', include(router.urls)),
-]
-```
-
-### `analytics/urls.py` (create this file)
-
-```python
-from django.urls import path
-from .views import (
-    SalesOverviewView,
-    RevenueTrendView,
-    TopProductsView,
-    CategoryPerformanceView,
-    PaymentMethodStatsView,
-    OrderStatusStatsView,
-    LowStockProductsView,
-)
-
-urlpatterns = [
-    path('analytics/sales-overview/', SalesOverviewView.as_view()),
-    path('analytics/revenue-trend/', RevenueTrendView.as_view()),
-    path('analytics/top-products/', TopProductsView.as_view()),
-    path('analytics/category-performance/', CategoryPerformanceView.as_view()),
-    path('analytics/payment-methods/', PaymentMethodStatsView.as_view()),
-    path('analytics/order-status/', OrderStatusStatsView.as_view()),
-    path('analytics/low-stock/', LowStockProductsView.as_view()),
-]
-```
-
-### Update `page/urls.py`
+### Main URL Config (`page/urls.py`)
 
 ```python
 from django.contrib import admin
 from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
-from rest_framework_simplejwt.views import (
-    TokenObtainPairView,
-    TokenRefreshView,
-)
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-
-    # Auth (custom login/signup/profile via accounts app)
     path('api/auth/', include('accounts.urls')),
-    path('api/auth/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
-
-    # App APIs (all under /api/)
     path('api/', include('products.urls')),
     path('api/', include('orders.urls')),
-    path('api/', include('analytics.urls')),
+    path('api/warehouse/', include('warehouse.urls')),
+    path('api/analytics/', include('analytics.urls')),
+    path('api/admin/', include('admin_panel.urls')),
+] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+```
+
+---
+
+## 5. Authentication API
+
+The frontend uses JWT (access + refresh tokens). Tokens stored in `localStorage`.
+
+### Endpoints
+
+| Method | URL | Request Body | Response | Auth |
+|--------|-----|-------------|----------|------|
+| `POST` | `/api/auth/login/` | `{ email, password }` | `{ access, refresh, user: { id, email, role, first_name, last_name } }` | No |
+| `POST` | `/api/auth/register/` | `{ firstName, lastName, email, password, confirmPassword, phone, dob, gender, address, role }` | `{ access, refresh, user }` | No |
+| `POST` | `/api/auth/refresh/` | `{ refresh }` | `{ access }` | No |
+| `POST` | `/api/auth/logout/` | `{ refresh }` (optional) | `204` | Yes |
+| `GET` | `/api/auth/profile/` | — | `{ id, email, first_name, last_name, phone, address, role, date_joined }` | Yes |
+| `PATCH` | `/api/auth/profile/` | Partial user fields | Updated user | Yes |
+| `POST` | `/api/auth/change-password/` | `{ old_password, new_password }` | `{ detail: "Password updated" }` | Yes |
+
+### Login Request/Response (critical)
+
+The frontend sends `email` + `password` to the login endpoint:
+```json
+// POST /api/auth/login/
+{ "email": "user@example.com", "password": "secret123" }
+```
+
+Response must include JWT tokens + user object with `role` field:
+```json
+{
+  "access": "eyJ...",
+  "refresh": "eyJ...",
+  "user": {
+    "id": 1,
+    "email": "john@example.com",
+    "role": "customer",
+    "firstName": "John",
+    "lastName": "Doe"
+  }
+}
+```
+
+### Register Request (critical)
+
+The frontend sends the **exact form fields** from the signup form:
+```json
+// POST /api/auth/register/
+{
+  "firstName": "John",
+  "lastName": "Doe",
+  "email": "john@gmail.com",
+  "password": "Secret@123",
+  "confirmPassword": "Secret@123",
+  "phone": "9812345678",
+  "dob": "2000-01-15",
+  "gender": "male",
+  "address": "Kathmandu, Nepal",
+  "role": "customer"
+}
+```
+
+> **Note**: The backend must accept either camelCase field names (as sent) or map them to snake_case. The backend should validate `password == confirmPassword`, email uniqueness, etc.
+
+### Frontend Signup Validation (already done)
+
+The frontend validates **before** sending to the API:
+- Email must end with `@gmail.com` or `.edu.np`
+- Password: 8+ chars, uppercase, lowercase, number, special char
+- `password === confirmPassword`
+- Phone: exactly 10 digits
+- Date of birth: must be ≥ 16 years old
+- All fields required (firstName, lastName, email, password, confirmPassword, phone, dob, gender, address)
+
+### Role-Based Redirect After Login
+
+After successful login, the frontend redirects:
+- `role === 'customer'` → `/` (home page)
+- `role === 'owner'` → `/owner/dashboard`
+- `role === 'warehouse'` → `/warehouse/dashboard`
+- `role === 'admin'` → `/admin/dashboard`
+```
+
+The frontend stores:
+- `access` → `localStorage` key from `Config.AUTH_TOKEN_KEY` (default: `"auth_token"`)
+- `refresh` → `localStorage` key from `Config.REFRESH_TOKEN_KEY` (default: `"refresh_token"`)
+- `user` → `localStorage` key `"customer_user"`
+
+### Django Implementation
+
+```python
+# accounts/models.py
+from django.contrib.auth.models import AbstractUser
+from django.db import models
+
+class CustomUser(AbstractUser):
+    ROLE_CHOICES = [('customer', 'Customer'), ('owner', 'Owner'), ('warehouse', 'Warehouse'), ('admin', 'Admin')]
+    role = models.CharField(max_length=20, choices=ROLE_CHOICES, default='customer')
+    phone = models.CharField(max_length=20, blank=True, default='')
+    address = models.TextField(blank=True, default='')
+    dob = models.DateField(null=True, blank=True)
+    gender = models.CharField(max_length=10, blank=True, default='')  # male, female, other
+
+# accounts/serializers.py
+from rest_framework import serializers
+from .models import CustomUser
+
+class UserSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CustomUser
+        fields = ['id', 'username', 'email', 'first_name', 'last_name', 'role', 'phone', 'address', 'date_joined']
+        read_only_fields = ['id', 'date_joined']
+
+class LoginSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+    password = serializers.CharField(write_only=True)
+
+class RegisterSerializer(serializers.ModelSerializer):
+    confirmPassword = serializers.CharField(write_only=True)
+    firstName = serializers.CharField(source='first_name')
+    lastName = serializers.CharField(source='last_name')
+    class Meta:
+        model = CustomUser
+        fields = ['firstName', 'lastName', 'email', 'password', 'confirmPassword', 'phone', 'address', 'role']
+        extra_kwargs = {'password': {'write_only': True}}
+    def validate(self, data):
+        if data['password'] != data.pop('confirmPassword'):
+            raise serializers.ValidationError({'confirmPassword': 'Passwords do not match'})
+        return data
+    def create(self, validated_data):
+        validated_data['username'] = validated_data['email']  # Use email as username
+        return CustomUser.objects.create_user(**validated_data)
+
+# accounts/views.py
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework_simplejwt.tokens import RefreshToken
+from django.contrib.auth import authenticate
+from .serializers import UserSerializer, LoginSerializer, RegisterSerializer
+
+class LoginView(APIView):
+    permission_classes = [AllowAny]
+    def post(self, request):
+        ser = LoginSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        # Authenticate by email — look up username from email first
+        from .models import CustomUser
+        try:
+            u = CustomUser.objects.get(email=ser.validated_data['email'])
+        except CustomUser.DoesNotExist:
+            return Response({'message': 'Invalid email or password'}, status=status.HTTP_401_UNAUTHORIZED)
+        user = authenticate(username=u.username, password=ser.validated_data['password'])
+        if not user:
+            return Response({'message': 'Invalid email or password'}, status=status.HTTP_401_UNAUTHORIZED)
+        refresh = RefreshToken.for_user(user)
+        return Response({
+            'access': str(refresh.access_token),
+            'refresh': str(refresh),
+            'user': UserSerializer(user).data,
+        })
+
+class RegisterView(APIView):
+    permission_classes = [AllowAny]
+    def post(self, request):
+        ser = RegisterSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        user = ser.save()
+        refresh = RefreshToken.for_user(user)
+        return Response({
+            'access': str(refresh.access_token),
+            'refresh': str(refresh),
+            'user': UserSerializer(user).data,
+        }, status=status.HTTP_201_CREATED)
+
+class ProfileView(APIView):
+    permission_classes = [IsAuthenticated]
+    def get(self, request):
+        return Response(UserSerializer(request.user).data)
+    def patch(self, request):
+        ser = UserSerializer(request.user, data=request.data, partial=True)
+        ser.is_valid(raise_exception=True)
+        ser.save()
+        return Response(ser.data)
+
+class ChangePasswordView(APIView):
+    permission_classes = [IsAuthenticated]
+    def post(self, request):
+        if not request.user.check_password(request.data.get('old_password', '')):
+            return Response({'detail': 'Wrong current password'}, status=400)
+        request.user.set_password(request.data['new_password'])
+        request.user.save()
+        return Response({'detail': 'Password updated'})
+```
+
+---
+
+## 6. Owner API Endpoints
+
+The Owner section has 4 pages: **Dashboard**, **Analytics**, **Product Management**, **Order Management**.
+
+### 6.1 Analytics Endpoints (Owner Dashboard + Analytics page)
+
+| Method | URL | Query Params | Response |
+|--------|-----|-------------|----------|
+| `GET` | `/api/analytics/sales-overview/` | `?days=30` | `{ total_revenue, total_profit, total_orders, total_customers, revenue_change, profit_change, orders_change, customers_change }` |
+| `GET` | `/api/analytics/revenue-trend/` | `?days=30&period=daily` | `[{ period, revenue, profit, orders }]` |
+| `GET` | `/api/analytics/top-products/` | `?days=30` | `[{ product_id, name, brand, category, total_quantity_sold, total_revenue }]` |
+| `GET` | `/api/analytics/category-performance/` | `?days=30` | `[{ category_name, total_revenue, total_orders, product_count }]` |
+| `GET` | `/api/analytics/payment-methods/` | `?days=30` | `[{ name, value }]` — name = payment method, value = total amount |
+| `GET` | `/api/analytics/order-status/` | `?days=30` | `[{ name, value }]` — name = status, value = count |
+| `GET` | `/api/analytics/low-stock/` | — | `[{ product_id, name, category_name, stock_quantity, reorder_level }]` |
+
+#### Response Details
+
+**Sales Overview:**
+```json
+{
+  "total_revenue": 1250000,
+  "total_profit": 320000,
+  "total_orders": 156,
+  "total_customers": 89,
+  "revenue_change": 12.5,
+  "profit_change": 8.3,
+  "orders_change": -2.1,
+  "customers_change": 15.0
+}
+```
+- `*_change` fields = percentage change vs previous period (e.g., last 30 days vs 30 days before that)
+
+**Revenue Trend:**
+```json
+[
+  { "period": "2025-06-01", "revenue": 45000, "profit": 12000, "orders": 5 },
+  { "period": "2025-06-02", "revenue": 62000, "profit": 18000, "orders": 8 }
 ]
+```
+- When `?period=monthly`: period = "2025-01", "2025-02", etc. and include `month` field too
 
-if settings.DEBUG:
-    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+**Top Products:**
+```json
+[
+  {
+    "product_id": 1,
+    "name": "Samsung Galaxy S24 Ultra",
+    "brand": "Samsung",
+    "category": "Smartphones",
+    "total_quantity_sold": 45,
+    "total_revenue": 5850000
+  }
+]
+```
+
+### 6.2 Product Management Endpoints
+
+| Method | URL | Query Params | Response |
+|--------|-----|-------------|----------|
+| `GET` | `/api/products/` | `?page_size=1000&search=&category=&ordering=name` | Paginated `{ results: [...], count, next, previous }` |
+| `GET` | `/api/products/{id}/` | — | Single product object |
+| `POST` | `/api/products/` | Product JSON body | Created product |
+| `PUT` | `/api/products/{id}/` | Full product JSON | Updated product |
+| `DELETE` | `/api/products/{id}/` | — | `204 No Content` |
+| `GET` | `/api/categories/` | — | `[{ id, name, description }]` |
+| `GET` | `/api/suppliers/` | — | `[{ id, name, contact_person, email, phone }]` |
+
+#### Product Object
+
+```json
+{
+  "id": 1,
+  "name": "Samsung Galaxy S24 Ultra",
+  "description": "...",
+  "sku": "SAM-S24U-256",
+  "brand": "Samsung",
+  "cost_price": 95000,
+  "selling_price": 129999,
+  "stock_quantity": 25,
+  "reorder_level": 10,
+  "category": 1,
+  "category_name": "Smartphones",
+  "supplier": 2,
+  "supplier_name": "Samsung Nepal",
+  "owner_name": "Evo Store Nepal",
+  "image_url": "/media/products/s24ultra.jpg",
+  "status": "Active",
+  "location": "A1-S3",
+  "weight": 0.23,
+  "warranty_months": 12,
+  "created_at": "2025-01-15T10:30:00Z",
+  "updated_at": "2025-06-10T14:20:00Z"
+}
+```
+
+### 6.3 Order Management Endpoints
+
+| Method | URL | Query Params | Response |
+|--------|-----|-------------|----------|
+| `GET` | `/api/orders/` | `?page_size=1000&status=&search=&ordering=-order_date` | Paginated `{ results: [...], count }` |
+| `GET` | `/api/orders/{id}/` | — | Order + items |
+| `PATCH` | `/api/orders/{id}/` | `{ "status": "Shipped" }` | Updated order |
+
+#### Order Object (list view)
+
+```json
+{
+  "id": 101,
+  "user_id": 5,
+  "user_name": "Rajesh Kumar",
+  "user_email": "rajesh@example.com",
+  "order_date": "2025-06-10T14:30:00Z",
+  "status": "Processing",
+  "items_count": 3,
+  "subtotal": 150000,
+  "tax_amount": 19500,
+  "shipping_fee": 200,
+  "discount": 5000,
+  "grand_total": 164700,
+  "payment_method": "UPI",
+  "payment_status": "Completed",
+  "shipping_address": "Kathmandu, Nepal"
+}
+```
+
+#### Order Detail (with items)
+
+```json
+{
+  "id": 101,
+  "user_name": "Rajesh Kumar",
+  "user_email": "rajesh@example.com",
+  "order_date": "2025-06-10T14:30:00Z",
+  "status": "Processing",
+  "items": [
+    {
+      "id": 1,
+      "product_id": 5,
+      "product_name": "iPhone 15 Pro",
+      "quantity": 1,
+      "unit_price": 150000,
+      "total_price": 150000
+    }
+  ],
+  "subtotal": 150000,
+  "tax_amount": 19500,
+  "shipping_fee": 200,
+  "discount": 5000,
+  "grand_total": 164700,
+  "payment_method": "UPI",
+  "payment_status": "Completed",
+  "shipping_address": "Kathmandu, Nepal",
+  "notes": ""
+}
 ```
 
 ---
 
-## STEP 8: Run Migrations
+## 7. Warehouse API Endpoints
 
-```bash
-cd backend
-python manage.py makemigrations products orders
-python manage.py migrate
-python manage.py createsuperuser
+The Warehouse section has 4 pages: **Dashboard**, **Inventory Management**, **Stock Movements**, **Low Stock Alerts**.
+
+### 7.1 Dashboard Endpoints
+
+| Method | URL | Query Params | Response |
+|--------|-----|-------------|----------|
+| `GET` | `/api/warehouse/overview/` | `?owner=` | `{ total_items, total_quantity, low_stock_count, out_of_stock_count, total_value, recent_movements_count, pending_alerts, categories_count }` |
+| `GET` | `/api/warehouse/stock-by-category/` | `?owner=` | `[{ category, quantity }]` |
+| `GET` | `/api/warehouse/stock-by-owner/` | — | `[{ owner, quantity }]` |
+| `GET` | `/api/warehouse/deliveries/` | `?owner=&page_size=10` | `[{ id, product_name, quantity, supplier, date, status }]` |
+| `GET` | `/api/warehouse/stock-movements/` | `?owner=&type=&ordering=-date&page_size=5` | Recent movements for dashboard |
+| `GET` | `/api/warehouse/alerts/` | `?owner=&status=active&page_size=5` | Active alerts for dashboard |
+
+#### Overview Response
+
+```json
+{
+  "total_items": 342,
+  "total_quantity": 15420,
+  "low_stock_count": 18,
+  "out_of_stock_count": 5,
+  "total_value": 12500000,
+  "recent_movements_count": 47,
+  "pending_alerts": 12,
+  "categories_count": 8
+}
 ```
+
+### 7.2 Inventory Management Endpoints
+
+| Method | URL | Query Params | Response |
+|--------|-----|-------------|----------|
+| `GET` | `/api/warehouse/inventory/` | `?search=&owner=&status=&category=&ordering=name&page_size=15` | Paginated `{ results: [...], count }` |
+| `GET` | `/api/warehouse/inventory/{id}/` | — | Single inventory item |
+| `PATCH` | `/api/warehouse/inventory/{id}/` | Partial fields | Updated item |
+
+#### Inventory Item
+
+```json
+{
+  "id": 1,
+  "name": "Samsung Galaxy S24 Ultra",
+  "sku": "SAM-S24U-256",
+  "category": "Smartphones",
+  "owner": "Evo Store Nepal",
+  "stock_quantity": 25,
+  "reorder_level": 10,
+  "max_stock": 100,
+  "status": "in_stock",
+  "location": "A1-S3",
+  "cost_price": 95000,
+  "selling_price": 129999,
+  "last_restocked": "2025-06-01T10:00:00Z",
+  "image_url": "/media/products/s24ultra.jpg"
+}
+```
+
+**Status values**: `"in_stock"`, `"low_stock"`, `"out_of_stock"`, `"overstock"`
+
+**Filtering**: `?status=low_stock` filters by stock status. `?search=samsung` searches name/SKU/location.
+
+### 7.3 Stock Movements Endpoints
+
+| Method | URL | Query Params | Response |
+|--------|-----|-------------|----------|
+| `GET` | `/api/warehouse/stock-movements/` | `?owner=&type=stock_in&date_from=&date_to=&ordering=-date&page_size=1000` | `{ results: [...], count }` or `[...]` |
+| `POST` | `/api/warehouse/stock-movements/` | `{ product_id, type, quantity, reason, reference }` | Created movement |
+| `GET` | `/api/warehouse/stock-movements/{id}/` | — | Single movement |
+
+#### Stock Movement Object
+
+```json
+{
+  "id": 1,
+  "product_id": 5,
+  "product_name": "iPhone 15 Pro",
+  "type": "stock_in",
+  "quantity": 50,
+  "owner": "Evo Store Nepal",
+  "reason": "New shipment from supplier",
+  "reference": "PO-2025-0042",
+  "performed_by": "warehouse_admin",
+  "date": "2025-06-10T09:30:00Z"
+}
+```
+
+**Type values**: `"stock_in"`, `"stock_out"`, `"returned"`, `"damaged"`, `"transferred"`
+
+**Important**: When creating a stock movement via POST, the backend should automatically update the product's `stock_quantity`:
+- `stock_in` / `returned` → **increase** stock
+- `stock_out` / `damaged` / `transferred` → **decrease** stock
+- Also check if stock drops below `reorder_level` → auto-create a `stock_alert`
+
+### 7.4 Alerts Endpoints
+
+| Method | URL | Query Params | Response |
+|--------|-----|-------------|----------|
+| `GET` | `/api/warehouse/alerts/` | `?owner=&severity=&status=active&ordering=-created_at&page_size=1000` | `{ results: [...] }` or `[...]` |
+| `PATCH` | `/api/warehouse/alerts/{id}/resolve/` | — | `{ detail: "Alert resolved" }` |
+| `PATCH` | `/api/warehouse/alerts/{id}/dismiss/` | — | `{ detail: "Alert dismissed" }` |
+
+#### Alert Object
+
+```json
+{
+  "id": 1,
+  "product_id": 5,
+  "product_name": "iPhone 15 Pro",
+  "sku": "APL-IP15P-256",
+  "severity": "critical",
+  "status": "active",
+  "current_stock": 2,
+  "threshold": 10,
+  "owner": "Evo Store Nepal",
+  "message": "Stock critically low — only 2 units remaining",
+  "created_at": "2025-06-10T08:00:00Z"
+}
+```
+
+**Severity logic** (backend should auto-calculate):
+- `current_stock == 0` → `"critical"`
+- `current_stock <= threshold * 0.5` → `"critical"`
+- `current_stock <= threshold` → `"warning"`
+- else → `"info"`
+
+**Resolve** sets `status = "resolved"` and `resolved_at = now()`.
+**Dismiss** sets `status = "dismissed"`.
+
+### 3.12 System Logs (Admin)
+
+```sql
+CREATE TABLE system_logs (
+    id              INT IDENTITY(1,1) PRIMARY KEY,
+    user_id         INT NULL REFERENCES users(id) ON DELETE SET NULL,
+    user_name       NVARCHAR(200) DEFAULT '',
+    user_email      NVARCHAR(254) DEFAULT '',
+    user_role       NVARCHAR(20) DEFAULT '',
+    action          NVARCHAR(20) NOT NULL,
+        -- 'CREATE' | 'UPDATE' | 'DELETE' | 'LOGIN' | 'LOGOUT' | 'ERROR' | 'EXPORT'
+    description     NVARCHAR(MAX) DEFAULT '',
+    ip_address      NVARCHAR(45) DEFAULT '',
+    status          NVARCHAR(20) DEFAULT 'success',   -- 'success' | 'failure' | 'warning'
+    metadata        NVARCHAR(MAX) NULL,               -- JSON string for extra data
+    timestamp       DATETIME2 DEFAULT GETDATE()
+);
+CREATE INDEX idx_system_logs_action ON system_logs(action);
+CREATE INDEX idx_system_logs_user ON system_logs(user_id);
+CREATE INDEX idx_system_logs_timestamp ON system_logs(timestamp);
+CREATE INDEX idx_system_logs_status ON system_logs(status);
+```
+
+### 3.13 Supplier Extended Fields (Admin)
+
+```sql
+-- Add these columns to the existing suppliers table for admin management:
+ALTER TABLE suppliers ADD
+    type            NVARCHAR(20) DEFAULT 'manufacturer',  -- 'manufacturer' | 'owner'
+    company         NVARCHAR(200) DEFAULT '',
+    rating          DECIMAL(3,2) DEFAULT 0.00,
+    on_time_delivery_rate DECIMAL(5,2) DEFAULT 0.00,
+    product_count   INT DEFAULT 0;
+```
+
+### 7.5 Supporting Endpoints
+
+| Method | URL | Response |
+|--------|-----|----------|
+| `GET` | `/api/warehouse/owners/` | `[{ "name": "Evo Store Nepal" }, { "name": "CG Digital" }]` or `["Evo Store Nepal", "CG Digital"]` |
+| `GET` | `/api/warehouse/suppliers/` | `[{ id, name, contact_person, email, phone }]` |
+| `GET` | `/api/warehouse/suppliers/{id}/` | Single supplier |
+
+**`/api/warehouse/owners/`**: Returns distinct `owner_name` values from the products table. Used by the OwnerFilter dropdown on all warehouse pages.
 
 ---
 
-## STEP 9: Seed Sample Data (Optional)
+## 8. Customer API Endpoints
 
-Create `products/management/commands/seed_data.py`:
+The Customer section has these pages: **Home** (product listing), **Cart**, **Checkout**, **Wishlist**, **Compare**, **Profile**, **Login/Register**.
+
+### 8.1 Product Browsing
+
+| Method | URL | Query Params | Response |
+|--------|-----|-------------|----------|
+| `GET` | `/api/products/` | `?search=&category=&brand=&min_price=&max_price=&ordering=name&page=1&page_size=20` | Paginated `{ results: [...], count }` |
+| `GET` | `/api/products/{id}/` | — | Single product with reviews |
+| `GET` | `/api/categories/` | — | `[{ id, name, description, image_url }]` |
+
+### 8.2 Cart
+
+| Method | URL | Request Body | Response |
+|--------|-----|-------------|----------|
+| `GET` | `/api/cart/` | — | `[{ id, product_id, product_name, product_image, selling_price, quantity, stock_quantity }]` |
+| `POST` | `/api/cart/` | `{ product_id, quantity }` | Created cart item |
+| `PATCH` | `/api/cart/{item_id}/` | `{ quantity }` | Updated cart item |
+| `DELETE` | `/api/cart/{item_id}/` | — | `204` |
+| `DELETE` | `/api/cart/clear/` | — | `204` — removes all items |
+
+### 8.3 Wishlist
+
+| Method | URL | Request Body | Response |
+|--------|-----|-------------|----------|
+| `GET` | `/api/wishlist/` | — | `[{ id, product_id, product_name, product_image, selling_price, stock_quantity, added_at }]` |
+| `POST` | `/api/wishlist/` | `{ product_id }` | Created wishlist item |
+| `DELETE` | `/api/wishlist/{product_id}/` | — | `204` |
+
+### 8.4 Orders (Customer)
+
+| Method | URL | Request Body | Response |
+|--------|-----|-------------|----------|
+| `POST` | `/api/orders/` | `{ shipping_address, payment_method, notes }` | Created order (auto-pulls items from cart, clears cart) |
+| `GET` | `/api/orders/my/` | `?page=1&ordering=-order_date` | Paginated `{ results: [...] }` — only current user's orders |
+| `GET` | `/api/orders/{id}/` | — | Order detail with items |
+| `PATCH` | `/api/orders/{id}/cancel/` | — | `{ detail: "Order cancelled" }` (only if status=Pending) |
+
+### 8.5 Reviews
+
+| Method | URL | Request Body | Response |
+|--------|-----|-------------|----------|
+| `GET` | `/api/products/{id}/reviews/` | — | `[{ id, user_name, rating, comment, created_at }]` |
+| `POST` | `/api/products/{id}/reviews/` | `{ rating, comment }` | Created review |
+
+### 8.6 Profile
+
+See [Authentication API](#5-authentication-api) — `GET/PATCH /api/auth/profile/` and `POST /api/auth/change-password/`.
+
+---
+
+## 9. Admin API Endpoints
+
+The Admin section has 5 pages: **Dashboard**, **User Management**, **Supplier Management**, **System Logs**, **Analytics Summary**.
+
+**All admin endpoints require `role === 'admin'`** — implement a custom permission class:
 
 ```python
-from django.core.management.base import BaseCommand
-from django.contrib.auth.models import User
-from products.models import Category, Supplier, Product
-from orders.models import Order, OrderItem
-from decimal import Decimal
-import random
-from datetime import timedelta
-from django.utils import timezone
+# admin_panel/permissions.py
+from rest_framework.permissions import BasePermission
 
-
-class Command(BaseCommand):
-    help = 'Seed sample data for development'
-
-    def handle(self, *args, **kwargs):
-        # Categories
-        cat_names = ['Smartphones', 'Laptops', 'Tablets', 'Smart Watches',
-                     'Headphones', 'Cameras', 'Drones', 'Gaming',
-                     'Speakers', 'Display', 'Accessories', 'Smart Home']
-        cats = {}
-        for name in cat_names:
-            c, _ = Category.objects.get_or_create(name=name)
-            cats[name] = c
-
-        # Suppliers
-        sup_data = [
-            ('Apple Inc.', 4.8), ('Samsung Electronics', 4.5),
-            ('Sony Corporation', 4.6), ('Dell Technologies', 4.3),
-            ('Lenovo Group', 4.2), ('Canon Inc.', 4.4),
-            ('DJI Technology', 4.7), ('Bose Corporation', 4.5),
-        ]
-        sups = {}
-        for name, rating in sup_data:
-            s, _ = Supplier.objects.get_or_create(name=name, defaults={'rating': rating})
-            sups[name] = s
-
-        # Products
-        products_data = [
-            ('iPhone 15 Pro Max', 'Smartphones', 'Apple', 104999, 149999, 45, 'Apple Inc.'),
-            ('Samsung Galaxy S24 Ultra', 'Smartphones', 'Samsung', 89999, 129999, 32, 'Samsung Electronics'),
-            ('MacBook Pro 16"', 'Laptops', 'Apple', 174999, 249900, 18, 'Apple Inc.'),
-            ('Dell XPS 15', 'Laptops', 'Dell', 124999, 179999, 22, 'Dell Technologies'),
-            ('iPad Pro 12.9"', 'Tablets', 'Apple', 89999, 129999, 28, 'Apple Inc.'),
-            ('Sony WH-1000XM5', 'Headphones', 'Sony', 19999, 29999, 67, 'Sony Corporation'),
-            ('Apple Watch Ultra 2', 'Smart Watches', 'Apple', 59999, 89999, 35, 'Apple Inc.'),
-            ('Canon EOS R6 Mark II', 'Cameras', 'Canon', 174999, 249999, 8, 'Canon Inc.'),
-            ('Samsung Galaxy Tab S9', 'Tablets', 'Samsung', 55999, 79999, 41, 'Samsung Electronics'),
-            ('DJI Mini 4 Pro', 'Drones', 'DJI', 69999, 99999, 15, 'DJI Technology'),
-        ]
-        prods = []
-        for name, cat, brand, cost, sell, stock, sup in products_data:
-            p, _ = Product.objects.get_or_create(
-                name=name,
-                defaults={
-                    'category': cats[cat], 'brand': brand,
-                    'cost_price': Decimal(cost), 'selling_price': Decimal(sell),
-                    'stock_quantity': stock, 'supplier': sups.get(sup),
-                }
-            )
-            prods.append(p)
-
-        # ── Create 5 Owner accounts ──
-        owners_data = [
-            ('owner1', 'Sushant', 'Adhikari', 'owner1@gmail.com', '9841000001'),
-            ('owner2', 'Aarav', 'Sharma', 'owner2@gmail.com', '9841000002'),
-            ('owner3', 'Priya', 'Thapa', 'owner3@gmail.com', '9841000003'),
-            ('owner4', 'Bikash', 'Poudel', 'owner4@gmail.com', '9841000004'),
-            ('owner5', 'Sneha', 'Karki', 'owner5@gmail.com', '9841000005'),
-        ]
-        for uname, fname, lname, email, phone in owners_data:
-            owner, created = User.objects.get_or_create(
-                username=uname,
-                defaults={
-                    'first_name': fname, 'last_name': lname,
-                    'email': email, 'is_staff': True,
-                }
-            )
-            if created or not owner.has_usable_password():
-                owner.set_password('Owner@123')
-                owner.save()
-            # Create/update profile with role='owner'
-            from accounts.models import Profile
-            Profile.objects.update_or_create(
-                user=owner,
-                defaults={'role': 'owner', 'phone': phone, 'address': 'Kathmandu, Nepal', 'gender': 'male' if uname != 'owner3' and uname != 'owner5' else 'female'}
-            )
-        self.stdout.write(self.style.SUCCESS(f'Created {len(owners_data)} owner accounts'))
-
-        # ── Create test customer ──
-        user, _ = User.objects.get_or_create(
-            username='testcustomer',
-            defaults={'first_name': 'Rahul', 'last_name': 'Sharma', 'email': 'rahul@example.com'}
-        )
-        if not user.has_usable_password():
-            user.set_password('test1234')
-            user.save()
-        Profile.objects.update_or_create(
-            user=user,
-            defaults={'role': 'customer', 'phone': '9841234567', 'address': 'Sankhamul, Kathmandu', 'gender': 'male'}
-        )
-
-        # Sample orders
-        statuses = ['Pending', 'Processing', 'Shipped', 'Delivered', 'Cancelled']
-        methods = ['Credit Card', 'UPI', 'Debit Card', 'Cash on Delivery', 'Net Banking']
-        for i in range(10):
-            prod = random.choice(prods)
-            qty = random.randint(1, 3)
-            total = prod.selling_price * qty
-            tax = total * Decimal('0.1')
-            grand = total + tax
-            order = Order.objects.create(
-                user=user,
-                total_amount=total,
-                tax_amount=tax,
-                grand_total=grand,
-                status=random.choice(statuses),
-                payment_method=random.choice(methods),
-                payment_status='Completed' if random.random() > 0.3 else 'Pending',
-                shipping_address='Sankhamul, Kathmandu',
-            )
-            order.order_date = timezone.now() - timedelta(days=random.randint(0, 30))
-            order.save()
-            OrderItem.objects.create(
-                order=order,
-                product=prod,
-                quantity=qty,
-                unit_price=prod.selling_price,
-                subtotal=prod.selling_price * qty,
-            )
-
-        self.stdout.write(self.style.SUCCESS('Sample data seeded successfully!'))
+class IsAdminRole(BasePermission):
+    def has_permission(self, request, view):
+        return request.user.is_authenticated and request.user.role == 'admin'
 ```
 
-Run it:
-```bash
-mkdir -p products/management/commands
-# Create __init__.py files
-touch products/management/__init__.py
-touch products/management/commands/__init__.py
-# Then run:
-python manage.py seed_data
+### 9.1 Dashboard / System Overview
+
+| Method | URL | Query Params | Response |
+|--------|-----|-------------|----------|
+| `GET` | `/api/admin/system-overview/` | — | System-wide KPIs |
+| `GET` | `/api/admin/users-by-role/` | — | User count per role |
+| `GET` | `/api/admin/registration-trend/` | `?days=30` | Daily registration counts |
+| `GET` | `/api/admin/recent-activity/` | `?limit=10` | Recent system log entries |
+| `GET` | `/api/admin/supplier-performance/` | `?limit=5` | Top suppliers by on-time rate |
+
+#### System Overview Response
+
+```json
+{
+  "total_users": 245,
+  "total_products": 1250,
+  "total_orders": 3420,
+  "total_revenue": 45000000,
+  "active_suppliers": 28,
+  "avg_order_value": 13157,
+  "user_growth": 12.5,
+  "product_growth": 3.2,
+  "order_growth": 8.7,
+  "revenue_growth": 15.3,
+  "supplier_growth": 5.0,
+  "aov_growth": 2.1
+}
 ```
 
----
+#### Users by Role
 
-## API Endpoint Reference
-
-These are the **exact** endpoints the frontend calls. All are prefixed with `/api/`:
-
-| Method | Endpoint | Frontend Usage | Response |
-|--------|----------|---------------|----------|
-| `POST` | `/api/auth/login/` | Login (owner + customer) | `{ user: {..., role}, access, refresh }` |
-| `POST` | `/api/auth/signup/` | Customer signup | `{ user: {..., role}, access, refresh, message }` |
-| `POST` | `/api/auth/refresh/` | Token refresh | `{ access }` |
-| `GET` | `/api/auth/profile/` | Get user profile (authenticated) | `{ id, firstName, lastName, email, phone, address, role, ... }` |
-| `GET` | `/api/analytics/sales-overview/?start_date=&end_date=` | Dashboard KPIs | `{ total_revenue, total_profit, total_items_sold, total_orders, avg_order_value, profit_margin, revenue_change, profit_change, total_customers }` |
-| `GET` | `/api/analytics/revenue-trend/?start_date=&end_date=&period=daily` | Revenue chart | `[{ period, revenue, profit, order_count }]` |
-| `GET` | `/api/analytics/top-products/?start_date=&end_date=&limit=10` | Top products table | `[{ rank, product_id, name, brand, category, total_quantity_sold, total_revenue, total_profit, profit_margin }]` |
-| `GET` | `/api/analytics/category-performance/?start_date=&end_date=` | Category pie chart | `[{ category_id, category_name, product_count, total_revenue, percentage }]` |
-| `GET` | `/api/analytics/payment-methods/?start_date=&end_date=` | Payment method breakdown (Analytics) | `[{ name, value }]` — name = payment method, value = total amount |
-| `GET` | `/api/analytics/order-status/` | Order status distribution (Analytics) | `[{ name, value }]` — name = status, value = count |
-| `GET` | `/api/analytics/low-stock/` | Low stock alert table (Analytics) | `[{ id, name, category_name, stock_quantity, reorder_level, status }]` |
-| `GET` | `/api/products/` | Product list | Paginated `{ count, next, previous, results: [...] }` |
-| `POST` | `/api/products/` | Add product | Product object |
-| `PUT` | `/api/products/:id/` | Edit product | Product object |
-| `DELETE` | `/api/products/:id/` | Delete product | 204 No Content |
-| `GET` | `/api/orders/` | Order list | Paginated `{ count, next, previous, results: [...] }` |
-| `GET` | `/api/orders/:id/` | Order detail | Order + items |
-| `PATCH` | `/api/orders/:id/` | Update status | `{ status: "Shipped" }` |
-| `GET` | `/api/categories/` | Category dropdown | `[{ id, name }]` |
-| `GET` | `/api/suppliers/` | Supplier dropdown | `[{ id, name, rating }]` |
-
----
-
-## Frontend → Backend Field Mapping
-
-All field names use **snake_case** (Python convention). The frontend already follows this. Key fields:
-
-**Product fields**: `id`, `name`, `category`, `category_name`, `brand`, `model_number`, `description`, `specifications`, `cost_price`, `selling_price`, `stock_quantity`, `reorder_level`, `supplier`, `supplier_name`, `warranty_months`, `status`, `image_url`, `created_at`, `updated_at`
-
-**Order fields**: `id`, `user`, `user_name`, `user_email`, `user_phone`, `order_date`, `items_count`, `total_amount`, `tax_amount`, `shipping_cost`, `discount_amount`, `grand_total`, `status`, `payment_method`, `payment_status`, `tracking_number`, `shipping_address`
-
-**Important**: Products use `id` (not `product_id`) in list/CRUD endpoints. Orders use `id` (not `order_id`) in list/CRUD endpoints. Only the analytics `top-products` endpoint uses `product_id`.
-
-**Analytics fields**: Match the response shapes in the API table above exactly.
-
----
-
-## STEP 10: Additional Analytics Views (Required)
-
-The frontend Analytics page calls 3 extra endpoints not covered in Step 6. Add these to `analytics/views.py`:
-
-```python
-class PaymentMethodStatsView(APIView):
-    """
-    GET /api/analytics/payment-methods/
-    Query params: start_date, end_date
-
-    Returns payment method revenue distribution for Analytics pie chart.
-    Response: [{ "name": "Credit Card", "value": 192997 }, ...]
-    """
-    permission_classes = [permissions.IsAuthenticated]
-
-    def get(self, request):
-        start = request.query_params.get('start_date')
-        end = request.query_params.get('end_date')
-
-        orders = Order.objects.exclude(status='Cancelled')
-        if start:
-            orders = orders.filter(order_date__date__gte=start)
-        if end:
-            orders = orders.filter(order_date__date__lte=end)
-
-        data = (
-            orders.values('payment_method')
-            .annotate(value=Sum('grand_total'))
-            .order_by('-value')
-        )
-
-        result = [{'name': d['payment_method'], 'value': float(d['value'] or 0)} for d in data]
-        return Response(result)
-
-
-class OrderStatusStatsView(APIView):
-    """
-    GET /api/analytics/order-status/
-    Query params: start_date, end_date
-
-    Returns order status count distribution for Analytics pie chart.
-    Response: [{ "name": "Delivered", "value": 4 }, ...]
-    """
-    permission_classes = [permissions.IsAuthenticated]
-
-    def get(self, request):
-        start = request.query_params.get('start_date')
-        end = request.query_params.get('end_date')
-
-        orders = Order.objects.all()
-        if start:
-            orders = orders.filter(order_date__date__gte=start)
-        if end:
-            orders = orders.filter(order_date__date__lte=end)
-
-        data = orders.values('status').annotate(value=Count('id')).order_by('-value')
-        result = [{'name': d['status'], 'value': d['value']} for d in data]
-        return Response(result)
-
-
-class LowStockProductsView(APIView):
-    """
-    GET /api/analytics/low-stock/
-    
-    Returns products where stock_quantity <= reorder_level.
-    Response: [{ "id": 1, "name": "...", "category_name": "...", "stock_quantity": 0, "reorder_level": 10, "status": "Out of Stock" }]
-    """
-    permission_classes = [permissions.IsAuthenticated]
-
-    def get(self, request):
-        from products.models import Product
-        products = (
-            Product.objects.select_related('category')
-            .filter(stock_quantity__lte=models.F('reorder_level'))
-            .order_by('stock_quantity')
-        )
-        result = [
-            {
-                'id': p.pk,
-                'name': p.name,
-                'category_name': p.category.name,
-                'stock_quantity': p.stock_quantity,
-                'reorder_level': p.reorder_level,
-                'status': p.status,
-            }
-            for p in products
-        ]
-        return Response(result)
+```json
+[
+  { "role": "customer", "count": 200 },
+  { "role": "owner", "count": 25 },
+  { "role": "warehouse", "count": 15 },
+  { "role": "admin", "count": 5 }
+]
 ```
 
-**Don't forget** to import `Count` at the top of `analytics/views.py`:
-```python
-from django.db.models import Sum, Count, Avg, F, Value
+#### Registration Trend
+
+```json
+[
+  { "date": "2025-06-01", "count": 5 },
+  { "date": "2025-06-02", "count": 8 }
+]
 ```
 
----
+#### Recent Activity
 
-## STEP 11: Add `user_phone` to Order Serializer
+```json
+[
+  {
+    "description": "User 'john@example.com' logged in",
+    "type": "info",
+    "timestamp": "2025-06-15T14:30:00Z"
+  }
+]
+```
+- `type`: `"info"`, `"warning"`, `"error"`, `"success"`
 
-The frontend OrderDetailsModal displays `user_phone`. Since we now have the `accounts.Profile` model with a `phone` field, use it:
+#### Supplier Performance
 
-```python
-# orders/serializers.py — update user_phone
-class OrderListSerializer(serializers.ModelSerializer):
-    user_name = serializers.CharField(read_only=True)
-    user_email = serializers.CharField(read_only=True)
-    user_phone = serializers.SerializerMethodField()
-    items_count = serializers.IntegerField(read_only=True)
+```json
+[
+  { "name": "Samsung Nepal", "on_time_rate": 95.5 },
+  { "name": "Apple Authorized", "on_time_rate": 92.0 }
+]
+```
 
-    def get_user_phone(self, obj):
-        return getattr(obj.user.profile, 'phone', '') if hasattr(obj.user, 'profile') else ''
+### 9.2 User Management
+
+| Method | URL | Query Params / Body | Response |
+|--------|-----|---------------------|----------|
+| `GET` | `/api/admin/users/` | `?page=1&per_page=20&search=&role=&is_active=true` | Paginated `{ results: [...], count, total_pages }` |
+| `GET` | `/api/admin/users/{id}/` | — | Single user detail |
+| `POST` | `/api/admin/users/` | `{ first_name, last_name, email, phone, role, company_name, password }` | Created user |
+| `PATCH` | `/api/admin/users/{id}/` | Partial user fields | Updated user |
+| `DELETE` | `/api/admin/users/{id}/` | — | `204` (cannot delete admin users) |
+| `PATCH` | `/api/admin/users/{id}/toggle-status/` | — | `{ is_active: true/false }` |
+| `POST` | `/api/admin/users/{id}/reset-password/` | — | `{ detail: "Password reset email sent" }` |
+| `GET` | `/api/admin/users/{id}/activity/` | `?limit=20` | `[{ action, description, timestamp }]` |
+
+#### User Object (Admin view)
+
+```json
+{
+  "id": 1,
+  "first_name": "John",
+  "last_name": "Doe",
+  "email": "john@example.com",
+  "phone": "+977 9841234567",
+  "role": "customer",
+  "company_name": "",
+  "is_active": true,
+  "date_joined": "2025-01-15T10:30:00Z",
+  "last_login": "2025-06-15T14:20:00Z"
+}
+```
+
+#### User Activity
+
+```json
+[
+  {
+    "action": "LOGIN",
+    "description": "Logged in from 192.168.1.10",
+    "timestamp": "2025-06-15T14:20:00Z"
+  }
+]
+```
+
+**Business Rules:**
+- Admin cannot delete other admin users
+- `company_name` field is required when role is `owner` or `warehouse`
+- Password reset generates a temporary password and sends email
+- Toggle status flips `is_active` between true/false
+
+### 9.3 Supplier Management
+
+| Method | URL | Query Params / Body | Response |
+|--------|-----|---------------------|----------|
+| `GET` | `/api/admin/suppliers/` | `?page=1&per_page=20&search=&type=manufacturer` | Paginated `{ results: [...], count, total_pages }` |
+| `GET` | `/api/admin/suppliers/{id}/` | — | Single supplier |
+| `POST` | `/api/admin/suppliers/` | `{ name, email, phone, company, type, address }` | Created supplier |
+| `PATCH` | `/api/admin/suppliers/{id}/` | Partial fields | Updated supplier |
+| `PATCH` | `/api/admin/suppliers/{id}/toggle-status/` | — | `{ is_active: true/false }` |
+| `GET` | `/api/admin/supplier-stats/` | — | Aggregate supplier stats |
+
+#### Supplier Object (Admin view)
+
+```json
+{
+  "id": 1,
+  "name": "Samsung Nepal",
+  "email": "contact@samsung.np",
+  "phone": "+977 9801234567",
+  "company": "Samsung Electronics",
+  "type": "manufacturer",
+  "address": "Kathmandu, Nepal",
+  "is_active": true,
+  "rating": 4.5,
+  "on_time_delivery_rate": 95.5,
+  "product_count": 45,
+  "created_at": "2025-01-10T10:00:00Z"
+}
+```
+
+#### Supplier Stats
+
+```json
+{
+  "total": 28,
+  "avg_on_time_rate": 88.5,
+  "avg_rating": 4.2,
+  "total_products": 1250
+}
+```
+
+### 9.4 System Logs
+
+| Method | URL | Query Params | Response |
+|--------|-----|-------------|----------|
+| `GET` | `/api/admin/logs/` | `?page=1&per_page=25&search=&action=&status=&date_from=&date_to=` | Paginated `{ results: [...], count, total_pages }` |
+| `GET` | `/api/admin/log-stats/` | Same filter params | `{ total, success, failure, warning }` |
+| `GET` | `/api/admin/logs/export/` | Same filter params | CSV file download |
+
+#### Log Object
+
+```json
+{
+  "id": 1,
+  "user_name": "John Doe",
+  "user_email": "john@example.com",
+  "user_role": "owner",
+  "action": "CREATE",
+  "description": "Created product 'Samsung Galaxy S24 Ultra'",
+  "ip_address": "192.168.1.10",
+  "status": "success",
+  "timestamp": "2025-06-15T14:30:00Z"
+}
+```
+
+#### Log Stats
+
+```json
+{
+  "total": 1520,
+  "success": 1450,
+  "failure": 45,
+  "warning": 25
+}
+```
+
+**Log Creation Rules** (implement via Django signals or middleware):
+- Log all `LOGIN` / `LOGOUT` events
+- Log all `CREATE` / `UPDATE` / `DELETE` operations on products, orders, users, suppliers
+- Log all `ERROR` events (failed auth, server errors)
+- Log `EXPORT` events (CSV downloads)
+- Capture `ip_address` from `request.META['REMOTE_ADDR']`
+- Store `user_name`, `user_email`, `user_role` for denormalized access
+
+### 9.5 Analytics Summary
+
+| Method | URL | Query Params | Response |
+|--------|-----|-------------|----------|
+| `GET` | `/api/admin/analytics/revenue-summary/` | `?days=30` | Revenue KPIs |
+| `GET` | `/api/admin/analytics/revenue-by-owner/` | `?days=30` | Revenue per owner |
+| `GET` | `/api/admin/analytics/revenue-trend/` | `?days=30` | Daily revenue + orders |
+| `GET` | `/api/admin/analytics/category-performance/` | `?days=30` | Revenue + orders per category |
+| `GET` | `/api/admin/analytics/customer-analytics/` | `?days=30` | Customer behavior metrics |
+| `GET` | `/api/admin/analytics/user-growth/` | `?days=30` | Daily new customers + owners |
+
+#### Revenue Summary
+
+```json
+{
+  "total_revenue": 45000000,
+  "total_orders": 3420,
+  "avg_order_value": 13157,
+  "revenue_growth": 15.3,
+  "order_growth": 8.7,
+  "aov_growth": 2.1
+}
+```
+
+#### Revenue by Owner
+
+```json
+[
+  { "owner_name": "Evo Store Nepal", "revenue": 18000000 },
+  { "owner_name": "CG Digital", "revenue": 12000000 }
+]
+```
+
+#### Revenue Trend
+
+```json
+[
+  { "date": "2025-06-01", "revenue": 450000, "orders": 15 },
+  { "date": "2025-06-02", "revenue": 620000, "orders": 22 }
+]
+```
+
+#### Category Performance
+
+```json
+[
+  { "name": "Smartphones", "revenue": 25000000, "order_count": 1200 },
+  { "name": "Laptops", "revenue": 12000000, "order_count": 800 }
+]
+```
+
+#### Customer Analytics
+
+```json
+{
+  "active_customers": 180,
+  "customer_growth": 12.5,
+  "repeat_rate": 35.5,
+  "avg_lifetime_value": 45000,
+  "cart_abandonment_rate": 22.0,
+  "avg_reviews_per_product": 3.2
+}
+```
+
+#### User Growth
+
+```json
+[
+  { "date": "2025-06-01", "customers": 5, "owners": 1 },
+  { "date": "2025-06-02", "customers": 8, "owners": 0 }
+]
 ```
 
 ---
 
-## Quick Verification Checklist
-
-After completing all steps, verify:
-
-- [ ] `python manage.py runserver` starts without errors
-- [ ] `http://localhost:8000/admin/` loads Django admin
-- [ ] `http://localhost:8000/api/products/` returns JSON (after auth)
-- [ ] `http://localhost:8000/api/orders/` returns JSON (after auth)
-- [ ] `http://localhost:8000/api/analytics/sales-overview/` returns KPI data
-- [ ] `http://localhost:8000/api/analytics/payment-methods/` returns payment breakdown
-- [ ] `http://localhost:8000/api/analytics/order-status/` returns status counts
-- [ ] `http://localhost:8000/api/analytics/low-stock/` returns low stock products
-- [ ] `http://localhost:8000/api/categories/` returns categories list
-- [ ] `http://localhost:8000/api/suppliers/` returns suppliers list
-- [ ] Frontend at `http://localhost:5173/owner/dashboard` loads without CORS errors
-- [ ] JWT login works: POST to `/api/auth/login/` with `{ "email": "owner1@gmail.com", "password": "Owner@123" }` → returns `{ user, access, refresh }`
-- [ ] Owner login returns `role: "owner"` and frontend redirects to `/owner/dashboard`
-- [ ] Customer signup works with all validations (email, password, phone, age)
-- [ ] Customer login returns `role: "customer"` and frontend redirects to `/`
-- [ ] All 5 owner accounts can log in and access owner pages
-- [ ] All 4 owner pages load data from backend (Dashboard, Products, Orders, Analytics)
-- [ ] JWT token is attached to Owner API requests (check browser Network tab)
-- [ ] Logout clears all tokens and redirects to `/login`
-
----
-
-## Frontend Owner Routes (Already Built)
-
-| Route | Page |
-|-------|------|
-| `/owner/dashboard` | Dashboard with KPIs, charts, top products |
-| `/owner/products` | Product CRUD with search, filter, pagination |
-| `/owner/orders` | Order list with status filter, detail modal |
-| `/owner/analytics` | Revenue, product, and order analytics tabs |
-
----
-
-## File Structure Created
+## 10. Frontend File Map
 
 ```
 frontend/src/
 ├── Config/
-│   └── Config.js                  ← API base URL and environment config
-├── context/                       ← (folder name: 'Context' on disk, imported as 'context')
-│   └── AuthContext.jsx            ← Auth state, login/logout, role management
+│   └── Config.js                  ← API base URL, token keys
+├── Context/
+│   └── AuthContext.jsx            ← Auth state, login/logout, role checks (isOwner/isWarehouse/isAdmin), bypass auth
 ├── services/
-│   └── api.js                     ← Axios instance + all API endpoints (ownerAPI + authAPI)
-├── components/Common/
-│   ├── Navbar.jsx                 ← Customer navbar (shows for non-owner routes)
-│   └── Footer.jsx                 ← Customer footer (hidden on owner routes)
-├── components/Owner/
-│   ├── OwnerNavbar.jsx            ← Owner navbar with accent bar, notification bell, user dropdown
-│   ├── OwnerLayout.jsx            ← Layout wrapper for /owner/* routes (auth guard)
-│   ├── SalesOverviewCards.jsx     ← 4 KPI cards (receives data from API via parent)
-│   ├── RevenueChart.jsx           ← Revenue + Profit line chart (Recharts)
-│   ├── TopProductsTable.jsx       ← Top 10 products table
-│   ├── CategoryChart.jsx          ← Category pie chart (Recharts)
-│   ├── ProductModal.jsx           ← Add/Edit product modal
-│   └── OrderDetailsModal.jsx      ← Order details + timeline modal
-├── pages/Customer/
-│   ├── Login.jsx                  ← Login/Signup form (handles owner + customer auth)
-│   ├── Profile.jsx                ← Customer profile page
-│   ├── Cart.jsx
-│   ├── Checkout.jsx
-│   ├── Compare.jsx
-│   └── Wishlist.jsx
-├── pages/Owner/
-│   ├── Dashboard.jsx              ← Calls ownerAPI — Dashboard with KPIs, charts, top products
-│   ├── ProductManagement.jsx      ← Calls ownerAPI — Product CRUD with search, filter, pagination
-│   ├── OrderManagement.jsx        ← Calls ownerAPI — Order list with status filter, detail modal
-│   └── Analytics.jsx              ← Calls ownerAPI — Revenue, product, and order analytics tabs
-└── App.jsx                        ← Main routing (owner routes wrapped in OwnerLayout)
+│   └── api.js                     ← Axios instance + ownerAPI + warehouseAPI + customerAPI + adminAPI + authAPI
+│
+├── components/
+│   ├── Common/
+│   │   ├── Navbar.jsx             ← Customer top navbar
+│   │   └── Footer.jsx             ← Customer footer
+│   ├── Owner/
+│   │   ├── OwnerNavbar.jsx        ← Owner sidebar/top nav
+│   │   ├── OwnerLayout.jsx        ← Auth guard wrapper for /owner/*
+│   │   ├── SalesOverviewCards.jsx  ← 4 KPI cards (data prop from API)
+│   │   ├── RevenueChart.jsx       ← Plotly revenue/profit line chart
+│   │   ├── TopProductsTable.jsx   ← Top products table
+│   │   ├── CategoryChart.jsx      ← Plotly category pie chart
+│   │   ├── ProductModal.jsx       ← Add/Edit product modal form
+│   │   └── OrderDetailsModal.jsx  ← Order detail + status update modal
+│   ├── warehouse/
+│   │   ├── WarehouseNavbar.jsx    ← Warehouse sidebar nav
+│   │   ├── WarehouseLayout.jsx    ← Auth guard wrapper for /warehouse/*
+│   │   ├── OwnerFilter.jsx        ← Owner dropdown filter (fetches from API)
+│   │   ├── StockLevelCard.jsx     ← KPI card for warehouse dashboard
+│   │   ├── InventoryTable.jsx     ← Reusable inventory table
+│   │   ├── MovementModal.jsx      ← Dual-mode: view movement details / create new movement
+│   │   ├── AlertBadge.jsx         ← Severity badge component
+│   │   └── SupplierPanel.jsx      ← Supplier info panel
+│   └── admin/
+│       ├── AdminNavbar.jsx        ← Admin top nav (red accent, Shield icon)
+│       ├── AdminLayout.jsx        ← Auth guard wrapper for /admin/*
+│       ├── SystemStatsCard.jsx    ← KPI card with icon, value, change indicator
+│       ├── UserTable.jsx          ← User table with avatars, role badges, action buttons
+│       ├── UserModal.jsx          ← Add/Edit user modal form (role-conditional fields)
+│       ├── SupplierTable.jsx      ← Supplier table with on-time rate bar, rating stars
+│       ├── SupplierModal.jsx      ← Add/Edit supplier modal form
+│       ├── LogTable.jsx           ← Logs table with action badges, status-tinted rows
+│       └── RoleBadge.jsx          ← Role badge component (Customer=gray, Owner=blue, Warehouse=orange, Admin=red)
+│
+├── pages/
+│   ├── Home.jsx                   ← Product listing, search, category filter
+│   ├── Customer/
+│   │   ├── Login.jsx              ← Login/Register with role selector
+│   │   ├── Cart.jsx               ← Shopping cart
+│   │   ├── Checkout.jsx           ← Checkout with address + payment
+│   │   ├── Wishlist.jsx           ← Saved products
+│   │   ├── Compare.jsx            ← Compare products side-by-side
+│   │   └── Profile.jsx            ← User profile management
+│   ├── Owner/
+│   │   ├── Dashboard.jsx          ← KPIs, revenue chart, top products, category chart
+│   │   ├── Analytics.jsx          ← Revenue/Products/Orders tabs, Plotly charts
+│   │   ├── ProductManagement.jsx  ← CRUD table with search/filter/sort/pagination
+│   │   └── OrderManagement.jsx    ← Order table with status pills, detail modal
+│   ├── Warehouse/
+│   │   ├── Dashboard.jsx          ← KPIs, Plotly stock charts, movements, alerts, deliveries
+│   │   ├── InventoryManagement.jsx← Full inventory table, search/filter/sort/pagination, CSV export
+│   │   ├── StockMovements.jsx     ← Movement log, type pills, date filters, CSV export, add modal
+│   │   └── LowStockAlerts.jsx     ← Alert cards, severity stats, resolve/dismiss actions
+│   └── Admin/
+│       ├── Dashboard.jsx          ← 6 KPIs, user role pie chart, registration trend, activity feed
+│       ├── UserManagement.jsx     ← User CRUD, search/filter, pagination, activity drawer
+│       ├── SupplierManagement.jsx ← Supplier tabs (All/Manufacturer/Owner), KPIs, performance chart
+│       ├── SystemLogs.jsx         ← Log table, date range, multi-filter, CSV export, pagination
+│       └── AnalyticsSummary.jsx   ← Revenue cards, multi-chart analytics, customer insights
+│
+└── App.jsx                        ← Routes: / (customer), /owner/*, /warehouse/*, /admin/*
 ```
 
 ---
 
-## Owner Login & Navigation
+## 11. Quick Start Checklist
 
-### 5 Owner Accounts (Backend-Validated)
+### For Django Backend Developer
 
-Owner login is **fully validated through the backend API** — there are no hardcoded credentials in the frontend. The backend must seed 5 owner accounts during setup. All 5 use the same login form as customers at `/login`.
+- [ ] Install packages: `pip install -r requirements.txt`
+- [ ] Configure MS SQL in `settings.py` (see section 2)
+- [ ] Add `corsheaders`, `rest_framework`, `rest_framework_simplejwt` to `INSTALLED_APPS`
+- [ ] Create Django apps: `accounts`, `products`, `orders`, `warehouse`, `analytics`, `admin_panel`
+- [ ] Create `CustomUser` model extending `AbstractUser` with `role`, `phone`, `address`
+- [ ] Set `AUTH_USER_MODEL = 'accounts.CustomUser'` in settings
+- [ ] Create all models matching the SQL schema (section 3), including `system_logs`
+- [ ] Run `python manage.py makemigrations && python manage.py migrate`
+- [ ] Create serializers for each model
+- [ ] Build ViewSets/APIViews for all endpoints (sections 5-9)
+- [ ] Wire up URLs under `/api/` prefix (including `/api/admin/`)
+- [ ] Create superuser: `python manage.py createsuperuser`
+- [ ] Seed sample data (categories, suppliers, products, users — include 1 admin user)
+- [ ] Test each endpoint with Postman/curl
 
-| # | Email | Password | First Name | Last Name |
-|---|-------|----------|------------|----------|
-| 1 | `owner1@gmail.com` | `Owner@123` | Sushant | Adhikari |
-| 2 | `owner2@gmail.com` | `Owner@123` | Aarav | Sharma |
-| 3 | `owner3@gmail.com` | `Owner@123` | Priya | Thapa |
-| 4 | `owner4@gmail.com` | `Owner@123` | Bikash | Poudel |
-| 5 | `owner5@gmail.com` | `Owner@123` | Sneha | Karki |
+### For MS SQL Developer
 
-**How it works:**
-1. User clicks **"Sign In"** in the customer navbar (top-right corner).
-2. User enters one of the 5 owner emails + password on the `/login` page.
-3. `Login.jsx` sends `{ email, password }` to **`POST /api/auth/login/`** (same endpoint for both owners and customers).
-4. Backend authenticates, checks the user's `role` field, and returns `{ user: {..., role: 'owner'}, access: '...', refresh: '...' }`.
-5. Frontend stores JWT tokens (`access` → `localStorage['auth_token']`, `refresh` → `localStorage['refresh_token']`) and user object.
-6. Frontend checks `userData.role` — if `'owner'`, redirects to `/owner/dashboard`; if `'customer'`, redirects to `/`.
-7. All `/owner/*` routes are wrapped in `<OwnerLayout>`, which:
-   - Checks `user.role === 'owner'` — redirects to `/login` if not.
-   - Renders `<OwnerNavbar>` instead of the customer `<Navbar>` and `<Footer>`.
-8. The customer `<Navbar>` and `<Footer>` are hidden on all `/owner/*` routes.
+- [ ] Create database `electronics_retail_db`
+- [ ] Run all CREATE TABLE scripts from section 3
+- [ ] Add indexes on frequently queried columns:
+  - `products.category_id`, `products.supplier_id`, `products.owner_name`, `products.status`
+  - `orders.user_id`, `orders.status`, `orders.order_date`
+  - `order_items.order_id`, `order_items.product_id`
+  - `stock_movements.product_id`, `stock_movements.type`, `stock_movements.date`
+  - `stock_alerts.product_id`, `stock_alerts.status`, `stock_alerts.severity`
+  - `cart_items.user_id`, `wishlist_items.user_id`
+  - `system_logs.user_id`, `system_logs.action`, `system_logs.timestamp`, `system_logs.entity_type`
+- [ ] Create stored procedures (optional, for analytics performance):
+  - `sp_GetSalesOverview @days INT` — aggregate orders for sales KPIs
+  - `sp_GetRevenueTrend @days INT, @period VARCHAR(10)` — daily/monthly trend
+  - `sp_GetStockOverview @owner NVARCHAR(200)` — warehouse KPIs
+- [ ] Seed reference data (categories, suppliers)
+- [ ] Seed test products (50+ items across categories)
+- [ ] Seed test users (1 owner, 1 warehouse, 1 admin, 3 customers)
+- [ ] Seed test orders (20+ orders with order_items)
+- [ ] Seed stock_movements (30+ records)
 
-**Note:** The owner login is NOT exposed on the home page. It's only accessible through the navbar "Sign In" link. Owner and customer use the **same login form and same backend endpoint**.
+### Important Business Rules (implement in Django views)
 
-### Owner Navbar Features
+1. **Order placement** (`POST /api/orders/`):
+   - Pull all items from the user's cart
+   - Check stock availability for each product
+   - Decrement `stock_quantity` for each product
+   - Create `stock_movements` records (type=`stock_out`)
+   - Clear the user's cart
+   - Calculate `subtotal`, `tax_amount` (13% GST), `grand_total`
+   - Check if any product falls below `reorder_level` → create `stock_alert`
 
-**Design:**
-- **Top accent bar** with store status indicator (green pulsing "Store Online" dot)
-- **Gradient logo** with box shadow
-- **Active link underline** — orange bar extends below navbar for current page
-- **Notification bell** with red dot indicator
-- **User dropdown menu** — shows **actual user name and email** from AuthContext (dynamic, not hardcoded):
-  - Profile header with avatar initial + name + email
-  - Quick links to Dashboard & Analytics
-  - Sign Out button (clears JWT tokens + user data)
-- **Fully responsive** — collapses on mobile (hides text, keeps icons)
+2. **Order cancellation** (`PATCH /api/orders/{id}/cancel/`):
+   - Only allow if `status == 'Pending'`
+   - Restore `stock_quantity` for each product
+   - Create `stock_movements` records (type=`returned`)
+   - Set `status = 'Cancelled'`
 
-**Navigation Links:**
+3. **Stock movement creation** (`POST /api/warehouse/stock-movements/`):
+   - Auto-update product's `stock_quantity`
+   - Auto-check if stock crosses `reorder_level` threshold
+   - Auto-create `stock_alert` if necessary
 
-| Link | Route | Icon |
-|------|-------|------|
-| Dashboard | `/owner/dashboard` | LayoutDashboard |
-| Products | `/owner/products` | Package |
-| Orders | `/owner/orders` | ShoppingCart |
-| Analytics | `/owner/analytics` | BarChart3 |
+4. **Warehouse owners list** (`GET /api/warehouse/owners/`):
+   - Return `SELECT DISTINCT owner_name FROM products WHERE owner_name != ''`
 
-**Theme:**
-- Background: `#232F3E` (dark navy)
-- Top bar: `#1a242f` (darker navy)
-- Accent/active: `#F97316` (orange)
-- Border: `3px solid #F97316`
-- Active state: Orange tinted background + orange text + underline bar
+5. **Permission guards**:
+   - Owner endpoints (`/api/analytics/*`, product CRUD, order management) → require `role == 'owner'`
+   - Warehouse endpoints (`/api/warehouse/*`) → require `role == 'warehouse'`
+   - Admin endpoints (`/api/admin/*`) → require `role == 'admin'`
+   - Customer endpoints (cart, wishlist, my orders) → require authenticated user
+   - Product browsing, categories → public (no auth required)
 
----
+6. **Login must use email** (not username):
+   - The frontend sends `{ email, password }` to `/api/auth/login/`
+   - The backend should look up the user by email, then authenticate
+   - The response MUST include a `user` object with a `role` field
 
-## Customer Authentication — Backend Integration
+7. **Register must accept frontend form fields**:
+   - The frontend sends camelCase: `firstName`, `lastName`, `email`, `password`, `confirmPassword`, `phone`, `dob`, `gender`, `address`, `role`
+   - The backend should map these to Django model fields (first_name, last_name, etc.)
+   - The backend should validate email uniqueness and passwords match
+   - The response should return JWT tokens + user object (same format as login)
 
-### Files Involved
-- `frontend/src/pages/Customer/Login.jsx` — Login/Signup form
-- `frontend/src/pages/Customer/Profile.jsx` — Customer profile page
-- `frontend/src/context/AuthContext.jsx` — Auth state management
-- `frontend/src/services/api.js` — API configuration
+8. **JWT 401 handling**:
+   - The frontend automatically clears stored tokens and redirects to `/login` on any 401 response
+   - The backend should return 401 for expired/invalid tokens
+   - Consider implementing token refresh endpoint (`/api/auth/refresh/`) for long sessions
 
----
+9. **CORS configuration**:
+   - The Django backend must allow requests from `http://localhost:5173` (Vite dev server)
+   - Add `corsheaders` middleware and whitelist the frontend origin
 
-### Login.jsx — Backend Connection
-
-**Current State:**  
-- Owner login: Validated through backend API (no hardcoded credentials)
-- Customer login/signup: Same backend API endpoints
-- Both use `POST /api/auth/login/` with `{ email, password }`
-
-**API Base URL Configuration:**  
-Located in `frontend/src/Config/Config.js`:
-```javascript
-export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api';
-```
-
-**Frontend Form Validations (Login):**
-- Email is required
-- Password is required
-
-**Frontend Form Validations (Signup):**
-- First name is required
-- Last name is required
-- Email must end with `@gmail.com` or `.edu.np`
-- Password: Min 8 chars, 1 uppercase, 1 lowercase, 1 number, 1 special character
-- Confirm password must match password
-- Phone number must be exactly 10 digits
-- Date of birth is required, user must be ≥16 years old
-- Address is required
-- Gender is required
-
-**Backend Endpoints Required:**
-
-**POST `/api/auth/signup/`**  
-Request:
-```json
-{
-  "firstName": "string",
-  "lastName": "string",
-  "email": "string",
-  "password": "string",
-  "confirmPassword": "string",
-  "address": "string",
-  "phone": "string",
-  "gender": "male|female|other",
-  "dob": "YYYY-MM-DD"
-}
-```
-
-Response (201):
-```json
-{
-  "user": {
-    "id": 1,
-    "firstName": "John",
-    "lastName": "Doe",
-    "email": "john@example.com",
-    "phone": "9841234567",
-    "address": "Kathmandu, Nepal",
-    "gender": "male",
-    "dob": "2000-01-01",
-    "role": "customer"
-  },
-  "access": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-  "refresh": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-  "message": "Account created successfully"
-}
-```
-
-**Backend Validations (Signup — must mirror frontend):**
-- Age check: User must be ≥16 years old
-- Email: Must be `@gmail.com` or `.edu.np`
-- Password: Min 8 chars, 1 uppercase, 1 lowercase, 1 number, 1 special char
-- Passwords must match
-- Email uniqueness check
-- Phone: Must be exactly 10 digits
-
-**POST `/api/auth/login/`** (same endpoint for owners and customers)  
-Request:
-```json
-{
-  "email": "string",
-  "password": "string"
-}
-```
-
-Response (200):
-```json
-{
-  "user": {
-    "id": 1,
-    "firstName": "Sushant",
-    "lastName": "Adhikari",
-    "email": "owner1@gmail.com",
-    "phone": "9841000001",
-    "address": "Kathmandu, Nepal",
-    "role": "owner"
-  },
-  "access": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-  "refresh": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
-}
-```
-
-Error (401):
-```json
-{
-  "message": "Invalid credentials"
-}
-```
-
-**Frontend Handles Response:**
-```javascript
-// Login.jsx — JWT token storage + role-based redirect
-if (data.access) localStorage.setItem('auth_token', data.access);
-if (data.refresh) localStorage.setItem('refresh_token', data.refresh);
-
-const userData = data.user || data;
-if (!userData.role) userData.role = 'customer';
-login(userData);  // Stores in AuthContext + localStorage
-
-if (userData.role === 'owner') {
-  navigate('/owner/dashboard');  // Owner → dashboard
-} else {
-  navigate('/');                 // Customer → home
-}
-```
-
----
-
-### Profile.jsx — Backend Connection
-
-**Current State:**  
-Profile page displays user data from `AuthContext` (stored in `localStorage` after login). No backend calls currently.
-
-**Fields Displayed:**
-- Full name (`firstName + lastName`)
-- Email
-- Phone
-- Address
-- Member since (currently hardcoded to `new Date()`)
-
-**Backend Integration Steps:**
-
-1. **Add GET endpoint** in Django:
-   ```
-   GET /api/auth/profile/
-   ```
-   
-   Headers:
-   ```
-   Authorization: Bearer <jwt_token>
-   ```
-   
-   Response (200):
-   ```json
-   {
-     "id": 1,
-     "firstName": "John",
-     "lastName": "Doe",
-     "email": "john@example.com",
-     "phone": "9841234567",
-     "address": "Kathmandu, Nepal",
-     "gender": "male",
-     "dob": "2000-01-01",
-     "createdAt": "2025-01-15T10:30:00Z",
-     "role": "customer"
-   }
-   ```
-
-2. **Update Profile.jsx** to fetch fresh data:
-   ```javascript
-   import { useState, useEffect } from 'react';
-   import api from '../../services/api';
-   
-   export default function Profile() {
-     const { user, logout, login } = useAuth();
-     const [profileData, setProfileData] = useState(user);
-     const [loading, setLoading] = useState(true);
-     const navigate = useNavigate();
-   
-     useEffect(() => {
-       const fetchProfile = async () => {
-         try {
-           const response = await api.get('/auth/profile/');
-           setProfileData(response.data);
-           login(response.data); // Update AuthContext with fresh data
-         } catch (error) {
-           console.error('Failed to fetch profile:', error);
-           if (error.response?.status === 401) {
-             logout();
-             navigate('/login');
-           }
-         } finally {
-           setLoading(false);
-         }
-       };
-       
-       if (user) fetchProfile();
-       else setLoading(false);
-     }, []);
-   
-     if (loading) return <div>Loading...</div>;
-     if (!profileData) return <div>Please log in</div>;
-   
-     // Rest of component...
-   }
-   ```
-
-3. **Display Member Since:**
-   ```javascript
-   <div style={styles.value}>
-     {new Date(profileData.createdAt).toLocaleDateString('en-US', {
-       year: 'numeric',
-       month: 'long',
-       day: 'numeric'
-     })}
-   </div>
-   ```
-
----
-
-### AuthContext — Token Management
-
-**Current Implementation (Updated):**  
-Stores user object in `localStorage` as `customer_user`. JWT tokens stored separately as `auth_token` and `refresh_token`.
-
-**On app load (`AuthContext.jsx`):**
-- Checks for both `customer_user` AND `auth_token` in localStorage
-- If either is missing, clears both — forces re-login
-- Prevents stale sessions where user data exists but token has been cleared
-
-**Login flow:**
-```javascript
-// Login.jsx stores tokens from API response
-localStorage.setItem('auth_token', data.access);     // JWT access token
-localStorage.setItem('refresh_token', data.refresh);  // JWT refresh token
-localStorage.setItem('customer_user', JSON.stringify(userData));  // User object
-```
-
-**Logout flow (`AuthContext.jsx` + `OwnerNavbar.jsx`):**
-```javascript
-// Clears ALL auth data
-localStorage.removeItem('customer_user');
-localStorage.removeItem('auth_token');
-localStorage.removeItem('refresh_token');
-```
-
-**Request interceptor (`services/api.js`):**  
-JWT access token is automatically attached to all Axios requests:
-```javascript
-api.interceptors.request.use((cfg) => {
-  const token = localStorage.getItem('auth_token');
-  if (token) cfg.headers.Authorization = `Bearer ${token}`;
-  return cfg;
-});
-```
-
-**401 Response interceptor (`services/api.js`):**  
-On 401 (expired/invalid token), clears ALL auth data and redirects to login:
-```javascript
-api.interceptors.response.use(
-  (res) => res,
-  (error) => {
-    if (error.response?.status === 401) {
-      localStorage.removeItem('auth_token');
-      localStorage.removeItem('refresh_token');
-      localStorage.removeItem('customer_user');
-      window.location.href = '/login';
-    }
-    return Promise.reject(error);
-  }
-);
-```
-
-**Token refresh (`services/api.js`):**
-```javascript
-authAPI.refreshToken(refreshToken)  // POST /api/auth/refresh/ { refresh: '...' }
-// Returns: { access: 'new_access_token' }
-```
-
----
-
-### Environment Variables Setup
-
-Create `frontend/.env`:
-```env
-VITE_API_BASE_URL=http://localhost:8000/api
-```
-
-For production:
-```env
-VITE_API_BASE_URL=https://yourdomain.com/api
-```
-
-**Note:** Vite requires `VITE_` prefix for all environment variables.
-
----
-
-### Summary Checklist
-
-**Backend Developer Tasks:**
-
-- [ ] Install DRF, CORS, SimpleJWT, Pillow, django-filter (Step 1)
-- [ ] Update `settings.py` — INSTALLED_APPS, CORS, REST_FRAMEWORK, JWT (Step 2)
-- [ ] Create Django apps: `products`, `orders`, `analytics`, `accounts` (Step 3)
-- [ ] Define models: Category, Supplier, Product, Order, OrderItem, Profile (Step 4)
-- [ ] Create `accounts` app with Profile model (`role`, `phone`, `address`, `gender`, `dob`)
-- [ ] Create serializers for all models (Step 5)
-- [ ] Create views: ProductViewSet, OrderViewSet, 7 analytics APIViews (Steps 6 + 10)
-- [ ] Configure URL routing for all endpoints (Step 7)
-- [ ] Run migrations and create superuser (Step 8)
-- [ ] Seed 5 owner accounts + sample data for testing (Step 9)
-- [ ] Add `user_phone` to Order serializer (Step 11)
-- [ ] Create `/api/auth/signup/` endpoint with validation rules (mirror frontend validations)
-- [ ] Create `/api/auth/login/` endpoint returning `{ user: {..., role}, access, refresh }`
-- [ ] Create `/api/auth/profile/` endpoint (authenticated, returns user data)
-- [ ] Add `role` field to Profile model (`'customer'` or `'owner'`)
-- [ ] Add CORS configuration for `http://localhost:5173`
-- [ ] Seed 5 owners: owner1-5@gmail.com with password `Owner@123` and role `owner`
-- [ ] Test all endpoints in the API endpoint reference table
-
-**Frontend Status (Completed):**
-
-- [x] All 4 Owner pages call real API endpoints (no mock data)
-- [x] Dashboard fetches KPIs, revenue trend, top products, category performance
-- [x] Analytics fetches summary, trends, payment stats, order stats, low stock
-- [x] ProductManagement does full CRUD via API (create/read/update/delete)
-- [x] OrderManagement fetches orders and updates status via API
-- [x] Loading states with skeleton/spinner on all pages
-- [x] Error states with retry buttons on all pages
-- [x] Refresh buttons on all pages to re-fetch data
-- [x] `data/mockData.js` removed — no mock data dependency
-- [x] Owner navbar with navigation (dynamic user name/email from AuthContext)
-- [x] Owner layout with auth guard
-- [x] Customer + Owner login form (same form, backend-validated)
-- [x] Signup form with full field validation
-- [x] JWT token storage (access + refresh) on login
-- [x] JWT token cleanup on logout (AuthContext + api.js 401 interceptor)
-- [x] Role-based redirect (owner → /owner/dashboard, customer → /)
-- [x] Profile page UI
+10. **Pagination format**:
+    - All paginated endpoints should return: `{ results: [...], count: N, total_pages: N }`
+    - The frontend sends `?page=1&per_page=20` (or `?page_size=20`)
+    - Support `?search=query` for text search across relevant fields

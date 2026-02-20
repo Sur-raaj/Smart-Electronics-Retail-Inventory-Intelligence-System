@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from 'react';
-import { RefreshCw, AlertCircle } from 'lucide-react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import { RefreshCw, AlertCircle, SlidersHorizontal } from 'lucide-react';
 import { ownerAPI } from '../../services/api';
 import SalesOverviewCards from '../../components/Owner/SalesOverviewCards';
 import RevenueChart from '../../components/Owner/RevenueChart';
@@ -68,6 +68,32 @@ export default function Dashboard() {
   const [timeRange, setTimeRange] = useState(30);
   const { salesData, revenueTrend, topProducts, categoryData, loading, error, refetch } = useDashboardData(timeRange);
 
+  // ── Interactive filter states ──
+  const [selectedCategory, setSelectedCategory] = useState('all');
+  const [minRevenue, setMinRevenue] = useState(0);
+  const maxRevenueValue = useMemo(() => {
+    if (!topProducts || !topProducts.length) return 100;
+    return Math.max(...topProducts.map((p) => p.total_revenue));
+  }, [topProducts]);
+
+  // Derive unique categories from top products
+  const categoryOptions = useMemo(() => {
+    if (!topProducts) return [];
+    return [...new Set(topProducts.map((p) => p.category))].filter(Boolean);
+  }, [topProducts]);
+
+  // Filtered products for the table
+  const filteredTopProducts = useMemo(() => {
+    if (!topProducts) return null;
+    return topProducts.filter((p) => {
+      if (selectedCategory !== 'all' && p.category !== selectedCategory) return false;
+      if (p.total_revenue < minRevenue) return false;
+      return true;
+    });
+  }, [topProducts, selectedCategory, minRevenue]);
+
+  const fmtShort = (v) => { if (v >= 100000) return `₹${(v / 100000).toFixed(1)}L`; if (v >= 1000) return `₹${(v / 1000).toFixed(0)}K`; return `₹${v}`; };
+
   return (
     <div className="owner-dash">
       {/* Header */}
@@ -104,9 +130,34 @@ export default function Dashboard() {
       </section>
 
       {/* Bottom Row: Products + Category */}
+      <section className="owner-dash-section">
+        {/* ── Interactive Filters: Dropdown + Slider ── */}
+        <div className="dash-filters-bar">
+          <SlidersHorizontal size={16} color="#6b7280" />
+          <span className="dash-filters-label">Product Filters:</span>
+
+          {/* Category Dropdown */}
+          <div className="dash-filter-group">
+            <label className="dash-filter-lbl">Category</label>
+            <select className="dash-filter-select" value={selectedCategory} onChange={(e) => setSelectedCategory(e.target.value)}>
+              <option value="all">All Categories</option>
+              {categoryOptions.map((c) => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </div>
+
+          {/* Revenue Slider */}
+          <div className="dash-filter-group dash-slider-group">
+            <label className="dash-filter-lbl">Min Revenue: {fmtShort(minRevenue)}</label>
+            <input type="range" className="dash-filter-slider" min={0} max={maxRevenueValue} step={Math.max(1, Math.round(maxRevenueValue / 100))} value={minRevenue} onChange={(e) => setMinRevenue(Number(e.target.value))} />
+          </div>
+
+          <button className="dash-filter-reset" onClick={() => { setSelectedCategory('all'); setMinRevenue(0); }}>Reset</button>
+        </div>
+      </section>
+
       <section className="owner-dash-bottom">
         <div className="owner-dash-bottom-left">
-          <TopProductsTable data={topProducts} loading={loading} />
+          <TopProductsTable data={filteredTopProducts} loading={loading} />
         </div>
         <div className="owner-dash-bottom-right">
           <CategoryChart data={categoryData} loading={loading} />
@@ -179,6 +230,43 @@ export default function Dashboard() {
         .owner-filter-btn.active { background: #F97316; color: #fff; border-color: #F97316; }
         .owner-filter-btn.active:hover { background: #ea580c; border-color: #ea580c; }
         @media (max-width: 480px) { .owner-filter-btns { display: grid; grid-template-columns: 1fr 1fr; } }
+
+        /* Dashboard Filters */
+        .dash-filters-bar {
+          display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;
+          background: #fff; padding: 0.85rem 1.25rem; border-radius: 12px;
+          border: 1px solid #e5e7eb; box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+        }
+        .dash-filters-label { font-size: 0.82rem; font-weight: 700; color: #374151; }
+        .dash-filter-group { display: flex; flex-direction: column; gap: 0.25rem; }
+        .dash-filter-lbl { font-size: 0.7rem; font-weight: 600; color: #6b7280; text-transform: uppercase; letter-spacing: 0.03em; }
+        .dash-filter-select {
+          padding: 0.4rem 0.75rem; border-radius: 8px; border: 1.5px solid #d1d5db;
+          font-size: 0.82rem; font-family: inherit; color: #1e293b; background: #fff;
+          cursor: pointer; min-width: 160px;
+        }
+        .dash-filter-select:focus { outline: none; border-color: #F97316; box-shadow: 0 0 0 3px rgba(249,115,22,0.1); }
+        .dash-slider-group { min-width: 180px; }
+        .dash-filter-slider {
+          width: 100%; height: 6px; border-radius: 3px; -webkit-appearance: none; appearance: none;
+          background: linear-gradient(to right, #F97316, #3B82F6); outline: none; cursor: pointer;
+        }
+        .dash-filter-slider::-webkit-slider-thumb {
+          -webkit-appearance: none; width: 18px; height: 18px; border-radius: 50%;
+          background: #fff; border: 2px solid #F97316; cursor: pointer;
+          box-shadow: 0 1px 4px rgba(0,0,0,0.15);
+        }
+        .dash-filter-slider::-moz-range-thumb {
+          width: 18px; height: 18px; border-radius: 50%;
+          background: #fff; border: 2px solid #F97316; cursor: pointer;
+          box-shadow: 0 1px 4px rgba(0,0,0,0.15);
+        }
+        .dash-filter-reset {
+          padding: 0.4rem 0.85rem; border-radius: 8px; font-size: 0.78rem; font-weight: 600;
+          border: 1.5px solid #d1d5db; background: #fff; color: #6b7280; cursor: pointer;
+          font-family: inherit; transition: all 0.15s; margin-left: auto;
+        }
+        .dash-filter-reset:hover { border-color: #F97316; color: #F97316; background: #FFF7ED; }
       `}</style>
     </div>
   );
