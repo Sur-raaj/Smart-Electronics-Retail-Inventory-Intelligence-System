@@ -25,6 +25,7 @@ api.interceptors.response.use(
     if (error.response?.status === 401) {
       localStorage.removeItem(config.AUTH_TOKEN_KEY);
       localStorage.removeItem(config.REFRESH_TOKEN_KEY);
+      localStorage.removeItem('customer_user');
       window.location.href = '/login';
     }
     return Promise.reject(error);

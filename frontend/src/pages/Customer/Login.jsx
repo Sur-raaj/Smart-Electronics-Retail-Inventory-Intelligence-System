@@ -33,10 +33,6 @@ export default function Login() {
     }
   }, [error]);
 
-  // ── Hardcoded owner credentials ──
-  const OWNER_EMAIL = 'owner@gmail.com';
-  const OWNER_PASSWORD = '12345';
-
   const validateSignup = (normalizedEmail) => {
     const emailOk = /(@gmail\.com|\.edu\.np)$/i.test(normalizedEmail);
     if (!emailOk) return 'Email must end with @gmail.com or .edu.np';
@@ -73,10 +69,39 @@ export default function Login() {
     
     setError('');
 
+    // ── Login validation ──
+    if (isLogin) {
+      if (!normalizedEmail) {
+        setError('Email is required');
+        return;
+      }
+      if (!formData.password) {
+        setError('Password is required');
+        return;
+      }
+    }
+
+    // ── Signup validation ──
     if (!isLogin) {
+      if (!formData.firstName.trim()) {
+        setError('First name is required');
+        return;
+      }
+      if (!formData.lastName.trim()) {
+        setError('Last name is required');
+        return;
+      }
       const validationError = validateSignup(normalizedEmail);
       if (validationError) {
         setError(validationError);
+        return;
+      }
+      if (!formData.address.trim()) {
+        setError('Address is required');
+        return;
+      }
+      if (!formData.gender) {
+        setError('Please select your gender');
         return;
       }
     }
@@ -84,21 +109,7 @@ export default function Login() {
     setIsLoading(true);
 
     try {
-      // ── Owner login (offline, no backend needed) ──
-      if (isLogin && normalizedEmail === OWNER_EMAIL && formData.password === OWNER_PASSWORD) {
-        const ownerUser = {
-          id: 'owner-1',
-          firstName: 'Owner',
-          lastName: '',
-          email: OWNER_EMAIL,
-          role: 'owner',
-        };
-        login(ownerUser);
-        navigate('/owner/dashboard');
-        return;
-      }
-
-      // ── Regular customer login / signup via backend ──
+      // ── All login/signup goes through backend API ──
       const API_BASE_URL = config.API_BASE_URL;
       const endpoint = isLogin ? '/auth/login/' : '/auth/signup/';
 
@@ -116,14 +127,27 @@ export default function Login() {
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.message || (isLogin ? 'Login failed' : 'Signup failed'));
+        throw new Error(data.message || (isLogin ? 'Invalid email or password' : 'Signup failed'));
+      }
+
+      // ── Store JWT tokens ──
+      if (data.access) {
+        localStorage.setItem(config.AUTH_TOKEN_KEY, data.access);
+      }
+      if (data.refresh) {
+        localStorage.setItem(config.REFRESH_TOKEN_KEY, data.refresh);
       }
 
       const userData = data.user || data;
-      // Ensure customer users have a role
       if (!userData.role) userData.role = 'customer';
       login(userData);
-      navigate('/');
+
+      // ── Redirect based on role ──
+      if (userData.role === 'owner') {
+        navigate('/owner/dashboard');
+      } else {
+        navigate('/');
+      }
     } catch (err) {
       setError(err.message || "Failed to connect to the server.");
     } finally {

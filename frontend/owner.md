@@ -92,6 +92,7 @@ INSTALLED_APPS = [
     'corsheaders',
     'django_filters',
     # Custom apps
+    'accounts',
     'products',
     'orders',
     'analytics',
@@ -161,6 +162,7 @@ cd backend
 python manage.py startapp products
 python manage.py startapp orders
 python manage.py startapp analytics
+python manage.py startapp accounts
 ```
 
 ---
@@ -289,6 +291,217 @@ class OrderItem(models.Model):
 
     def __str__(self):
         return f'{self.product.name} x{self.quantity}'
+```
+
+### `accounts/models.py`
+
+```python
+from django.db import models
+from django.contrib.auth.models import User
+
+class Profile(models.Model):
+    ROLE_CHOICES = [
+        ('customer', 'Customer'),
+        ('owner', 'Owner'),
+    ]
+    GENDER_CHOICES = [
+        ('male', 'Male'),
+        ('female', 'Female'),
+        ('other', 'Other'),
+    ]
+
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
+    role = models.CharField(max_length=20, choices=ROLE_CHOICES, default='customer')
+    phone = models.CharField(max_length=15, blank=True, null=True)
+    address = models.TextField(blank=True, null=True)
+    gender = models.CharField(max_length=10, choices=GENDER_CHOICES, blank=True, null=True)
+    dob = models.DateField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f'{self.user.username} ({self.role})'
+```
+
+### `accounts/serializers.py`
+
+```python
+from rest_framework import serializers
+from django.contrib.auth.models import User
+from .models import Profile
+import re
+from datetime import date
+
+class SignupSerializer(serializers.Serializer):
+    firstName = serializers.CharField(max_length=30)
+    lastName = serializers.CharField(max_length=30)
+    email = serializers.EmailField()
+    password = serializers.CharField(write_only=True)
+    confirmPassword = serializers.CharField(write_only=True)
+    phone = serializers.CharField(max_length=15)
+    address = serializers.CharField()
+    gender = serializers.ChoiceField(choices=['male', 'female', 'other'])
+    dob = serializers.DateField()
+
+    def validate_email(self, value):
+        value = value.lower().strip()
+        if not re.search(r'(@gmail\.com|\.edu\.np)$', value, re.IGNORECASE):
+            raise serializers.ValidationError('Email must end with @gmail.com or .edu.np')
+        if User.objects.filter(email=value).exists():
+            raise serializers.ValidationError('An account with this email already exists')
+        return value
+
+    def validate_password(self, value):
+        if not re.match(r'^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z\d]).{8,}$', value):
+            raise serializers.ValidationError(
+                'Password must be 8+ chars with uppercase, lowercase, number, and special character'
+            )
+        return value
+
+    def validate_phone(self, value):
+        if not re.match(r'^\d{10}$', value):
+            raise serializers.ValidationError('Phone number must be exactly 10 digits')
+        return value
+
+    def validate_dob(self, value):
+        today = date.today()
+        age = today.year - value.year - ((today.month, today.day) < (value.month, value.day))
+        if age < 16:
+            raise serializers.ValidationError('You must be at least 16 years old to sign up')
+        return value
+
+    def validate(self, data):
+        if data['password'] != data['confirmPassword']:
+            raise serializers.ValidationError({'confirmPassword': 'Passwords do not match'})
+        return data
+
+    def create(self, validated_data):
+        user = User.objects.create_user(
+            username=validated_data['email'],  # Use email as username
+            email=validated_data['email'],
+            password=validated_data['password'],
+            first_name=validated_data['firstName'],
+            last_name=validated_data['lastName'],
+        )
+        Profile.objects.create(
+            user=user,
+            role='customer',
+            phone=validated_data['phone'],
+            address=validated_data['address'],
+            gender=validated_data['gender'],
+            dob=validated_data['dob'],
+        )
+        return user
+
+
+class LoginSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+    password = serializers.CharField()
+
+
+class UserProfileSerializer(serializers.Serializer):
+    """Returns user data in the format the frontend expects (camelCase)."""
+    id = serializers.IntegerField(source='user.id')
+    firstName = serializers.CharField(source='user.first_name')
+    lastName = serializers.CharField(source='user.last_name')
+    email = serializers.EmailField(source='user.email')
+    phone = serializers.CharField()
+    address = serializers.CharField()
+    gender = serializers.CharField()
+    dob = serializers.DateField()
+    role = serializers.CharField()
+    createdAt = serializers.DateTimeField(source='created_at')
+```
+
+### `accounts/views.py`
+
+```python
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status, permissions
+from rest_framework_simplejwt.tokens import RefreshToken
+from django.contrib.auth import authenticate
+from django.contrib.auth.models import User
+from .serializers import SignupSerializer, LoginSerializer, UserProfileSerializer
+from .models import Profile
+
+
+class SignupView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request):
+        serializer = SignupSerializer(data=request.data)
+        if not serializer.is_valid():
+            # Return first error message
+            first_error = next(iter(serializer.errors.values()))[0]
+            return Response(
+                {'message': str(first_error)},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        user = serializer.save()
+        tokens = RefreshToken.for_user(user)
+        profile = user.profile
+        return Response({
+            'user': UserProfileSerializer(profile).data,
+            'access': str(tokens.access_token),
+            'refresh': str(tokens),
+            'message': 'Account created successfully',
+        }, status=status.HTTP_201_CREATED)
+
+
+class LoginView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request):
+        serializer = LoginSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        email = serializer.validated_data['email'].lower().strip()
+        password = serializer.validated_data['password']
+
+        # Find user by email
+        try:
+            user_obj = User.objects.get(email=email)
+        except User.DoesNotExist:
+            return Response(
+                {'message': 'Invalid credentials'},
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+
+        user = authenticate(username=user_obj.username, password=password)
+        if user is None:
+            return Response(
+                {'message': 'Invalid credentials'},
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+
+        tokens = RefreshToken.for_user(user)
+        profile = user.profile
+        return Response({
+            'user': UserProfileSerializer(profile).data,
+            'access': str(tokens.access_token),
+            'refresh': str(tokens),
+        })
+
+
+class ProfileView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        profile = request.user.profile
+        return Response(UserProfileSerializer(profile).data)
+```
+
+### `accounts/urls.py`
+
+```python
+from django.urls import path
+from .views import SignupView, LoginView, ProfileView
+
+urlpatterns = [
+    path('login/', LoginView.as_view(), name='auth_login'),
+    path('signup/', SignupView.as_view(), name='auth_signup'),
+    path('profile/', ProfileView.as_view(), name='auth_profile'),
+]
 ```
 
 ---
@@ -727,8 +940,8 @@ from rest_framework_simplejwt.views import (
 urlpatterns = [
     path('admin/', admin.site.urls),
 
-    # Auth
-    path('api/auth/login/', TokenObtainPairView.as_view(), name='token_obtain'),
+    # Auth (custom login/signup/profile via accounts app)
+    path('api/auth/', include('accounts.urls')),
     path('api/auth/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
 
     # App APIs (all under /api/)
@@ -819,7 +1032,34 @@ class Command(BaseCommand):
             )
             prods.append(p)
 
-        # Create test user
+        # ── Create 5 Owner accounts ──
+        owners_data = [
+            ('owner1', 'Sushant', 'Adhikari', 'owner1@gmail.com', '9841000001'),
+            ('owner2', 'Aarav', 'Sharma', 'owner2@gmail.com', '9841000002'),
+            ('owner3', 'Priya', 'Thapa', 'owner3@gmail.com', '9841000003'),
+            ('owner4', 'Bikash', 'Poudel', 'owner4@gmail.com', '9841000004'),
+            ('owner5', 'Sneha', 'Karki', 'owner5@gmail.com', '9841000005'),
+        ]
+        for uname, fname, lname, email, phone in owners_data:
+            owner, created = User.objects.get_or_create(
+                username=uname,
+                defaults={
+                    'first_name': fname, 'last_name': lname,
+                    'email': email, 'is_staff': True,
+                }
+            )
+            if created or not owner.has_usable_password():
+                owner.set_password('Owner@123')
+                owner.save()
+            # Create/update profile with role='owner'
+            from accounts.models import Profile
+            Profile.objects.update_or_create(
+                user=owner,
+                defaults={'role': 'owner', 'phone': phone, 'address': 'Kathmandu, Nepal', 'gender': 'male' if uname != 'owner3' and uname != 'owner5' else 'female'}
+            )
+        self.stdout.write(self.style.SUCCESS(f'Created {len(owners_data)} owner accounts'))
+
+        # ── Create test customer ──
         user, _ = User.objects.get_or_create(
             username='testcustomer',
             defaults={'first_name': 'Rahul', 'last_name': 'Sharma', 'email': 'rahul@example.com'}
@@ -827,6 +1067,10 @@ class Command(BaseCommand):
         if not user.has_usable_password():
             user.set_password('test1234')
             user.save()
+        Profile.objects.update_or_create(
+            user=user,
+            defaults={'role': 'customer', 'phone': '9841234567', 'address': 'Sankhamul, Kathmandu', 'gender': 'male'}
+        )
 
         # Sample orders
         statuses = ['Pending', 'Processing', 'Shipped', 'Delivered', 'Cancelled']
@@ -878,8 +1122,10 @@ These are the **exact** endpoints the frontend calls. All are prefixed with `/ap
 
 | Method | Endpoint | Frontend Usage | Response |
 |--------|----------|---------------|----------|
-| `POST` | `/api/auth/login/` | Login | `{ access, refresh }` |
+| `POST` | `/api/auth/login/` | Login (owner + customer) | `{ user: {..., role}, access, refresh }` |
+| `POST` | `/api/auth/signup/` | Customer signup | `{ user: {..., role}, access, refresh, message }` |
 | `POST` | `/api/auth/refresh/` | Token refresh | `{ access }` |
+| `GET` | `/api/auth/profile/` | Get user profile (authenticated) | `{ id, firstName, lastName, email, phone, address, role, ... }` |
 | `GET` | `/api/analytics/sales-overview/?start_date=&end_date=` | Dashboard KPIs | `{ total_revenue, total_profit, total_items_sold, total_orders, avg_order_value, profit_margin, revenue_change, profit_change, total_customers }` |
 | `GET` | `/api/analytics/revenue-trend/?start_date=&end_date=&period=daily` | Revenue chart | `[{ period, revenue, profit, order_count }]` |
 | `GET` | `/api/analytics/top-products/?start_date=&end_date=&limit=10` | Top products table | `[{ rank, product_id, name, brand, category, total_quantity_sold, total_revenue, total_profit, profit_margin }]` |
@@ -1012,10 +1258,10 @@ from django.db.models import Sum, Count, Avg, F, Value
 
 ## STEP 11: Add `user_phone` to Order Serializer
 
-The frontend OrderDetailsModal displays `user_phone`. Add a phone field to the User model or profile, and expose it in the OrderSerializer:
+The frontend OrderDetailsModal displays `user_phone`. Since we now have the `accounts.Profile` model with a `phone` field, use it:
 
 ```python
-# orders/serializers.py — add this property
+# orders/serializers.py — update user_phone
 class OrderListSerializer(serializers.ModelSerializer):
     user_name = serializers.CharField(read_only=True)
     user_email = serializers.CharField(read_only=True)
@@ -1023,11 +1269,7 @@ class OrderListSerializer(serializers.ModelSerializer):
     items_count = serializers.IntegerField(read_only=True)
 
     def get_user_phone(self, obj):
-        # If using a Profile model with phone field:
-        # return getattr(obj.user.profile, 'phone', '')
-        # Or if phone is on User model:
-        # return obj.user.phone
-        return ''  # Implement based on your User/Profile model
+        return getattr(obj.user.profile, 'phone', '') if hasattr(obj.user, 'profile') else ''
 ```
 
 ---
@@ -1047,8 +1289,14 @@ After completing all steps, verify:
 - [ ] `http://localhost:8000/api/categories/` returns categories list
 - [ ] `http://localhost:8000/api/suppliers/` returns suppliers list
 - [ ] Frontend at `http://localhost:5173/owner/dashboard` loads without CORS errors
-- [ ] JWT login works: POST to `/api/auth/login/` with `{ username, password }`
+- [ ] JWT login works: POST to `/api/auth/login/` with `{ "email": "owner1@gmail.com", "password": "Owner@123" }` → returns `{ user, access, refresh }`
+- [ ] Owner login returns `role: "owner"` and frontend redirects to `/owner/dashboard`
+- [ ] Customer signup works with all validations (email, password, phone, age)
+- [ ] Customer login returns `role: "customer"` and frontend redirects to `/`
+- [ ] All 5 owner accounts can log in and access owner pages
 - [ ] All 4 owner pages load data from backend (Dashboard, Products, Orders, Analytics)
+- [ ] JWT token is attached to Owner API requests (check browser Network tab)
+- [ ] Logout clears all tokens and redirects to `/login`
 
 ---
 
@@ -1104,25 +1352,31 @@ frontend/src/
 
 ## Owner Login & Navigation
 
-### Hardcoded Owner Credentials (Frontend-Only)
+### 5 Owner Accounts (Backend-Validated)
 
-| Field | Value |
-|-------|-------|
-| Email | `owner@gmail.com` |
-| Password | `12345` |
+Owner login is **fully validated through the backend API** — there are no hardcoded credentials in the frontend. The backend must seed 5 owner accounts during setup. All 5 use the same login form as customers at `/login`.
+
+| # | Email | Password | First Name | Last Name |
+|---|-------|----------|------------|----------|
+| 1 | `owner1@gmail.com` | `Owner@123` | Sushant | Adhikari |
+| 2 | `owner2@gmail.com` | `Owner@123` | Aarav | Sharma |
+| 3 | `owner3@gmail.com` | `Owner@123` | Priya | Thapa |
+| 4 | `owner4@gmail.com` | `Owner@123` | Bikash | Poudel |
+| 5 | `owner5@gmail.com` | `Owner@123` | Sneha | Karki |
 
 **How it works:**
 1. User clicks **"Sign In"** in the customer navbar (top-right corner).
-2. User enters the owner credentials above on `/login` page.
-3. `Login.jsx` checks the email/password against the hardcoded values *before* calling the backend API.
-4. On match, it creates an owner user object with `role: 'owner'` and stores it in `AuthContext` + `localStorage`.
-5. The user is redirected to `/owner/dashboard`.
-6. All `/owner/*` routes are wrapped in `<OwnerLayout>`, which:
+2. User enters one of the 5 owner emails + password on the `/login` page.
+3. `Login.jsx` sends `{ email, password }` to **`POST /api/auth/login/`** (same endpoint for both owners and customers).
+4. Backend authenticates, checks the user's `role` field, and returns `{ user: {..., role: 'owner'}, access: '...', refresh: '...' }`.
+5. Frontend stores JWT tokens (`access` → `localStorage['auth_token']`, `refresh` → `localStorage['refresh_token']`) and user object.
+6. Frontend checks `userData.role` — if `'owner'`, redirects to `/owner/dashboard`; if `'customer'`, redirects to `/`.
+7. All `/owner/*` routes are wrapped in `<OwnerLayout>`, which:
    - Checks `user.role === 'owner'` — redirects to `/login` if not.
    - Renders `<OwnerNavbar>` instead of the customer `<Navbar>` and `<Footer>`.
-7. The customer `<Navbar>` and `<Footer>` are hidden on all `/owner/*` routes.
+8. The customer `<Navbar>` and `<Footer>` are hidden on all `/owner/*` routes.
 
-**Note:** The owner login is NOT exposed on the home page. It's only accessible through the navbar "Sign In" link.
+**Note:** The owner login is NOT exposed on the home page. It's only accessible through the navbar "Sign In" link. Owner and customer use the **same login form and same backend endpoint**.
 
 ### Owner Navbar Features
 
@@ -1131,10 +1385,10 @@ frontend/src/
 - **Gradient logo** with box shadow
 - **Active link underline** — orange bar extends below navbar for current page
 - **Notification bell** with red dot indicator
-- **User dropdown menu** — click avatar/name to access:
-  - Profile header with email
+- **User dropdown menu** — shows **actual user name and email** from AuthContext (dynamic, not hardcoded):
+  - Profile header with avatar initial + name + email
   - Quick links to Dashboard & Analytics
-  - Sign Out button
+  - Sign Out button (clears JWT tokens + user data)
 - **Fully responsive** — collapses on mobile (hides text, keeps icons)
 
 **Navigation Links:**
@@ -1153,13 +1407,6 @@ frontend/src/
 - Border: `3px solid #F97316`
 - Active state: Orange tinted background + orange text + underline bar
 
-### Backend Integration Note
-When the backend is connected, replace the hardcoded owner check in `Login.jsx` (lines 47-60) with a proper API call. The backend should return a `role` field in the user object:
-- `"role": "owner"` → redirects to `/owner/dashboard`
-- `"role": "customer"` → redirects to `/` (home)
-
-The `OwnerLayout` auth guard will continue to work as-is.
-
 ---
 
 ## Customer Authentication — Backend Integration
@@ -1175,8 +1422,9 @@ The `OwnerLayout` auth guard will continue to work as-is.
 ### Login.jsx — Backend Connection
 
 **Current State:**  
-- Owner login: Hardcoded (no backend call)
-- Customer login/signup: Calls `http://localhost:5000/api/auth/login` and `/auth/signup`
+- Owner login: Validated through backend API (no hardcoded credentials)
+- Customer login/signup: Same backend API endpoints
+- Both use `POST /api/auth/login/` with `{ email, password }`
 
 **API Base URL Configuration:**  
 Located in `frontend/src/Config/Config.js`:
@@ -1184,96 +1432,116 @@ Located in `frontend/src/Config/Config.js`:
 export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api';
 ```
 
-**To Connect to Django Backend:**
+**Frontend Form Validations (Login):**
+- Email is required
+- Password is required
 
-1. **Update `.env` file** in `frontend/` folder:
-   ```env
-   VITE_API_BASE_URL=http://localhost:8000/api
-   ```
+**Frontend Form Validations (Signup):**
+- First name is required
+- Last name is required
+- Email must end with `@gmail.com` or `.edu.np`
+- Password: Min 8 chars, 1 uppercase, 1 lowercase, 1 number, 1 special character
+- Confirm password must match password
+- Phone number must be exactly 10 digits
+- Date of birth is required, user must be ≥16 years old
+- Address is required
+- Gender is required
 
-2. **Backend Endpoints Required:**
+**Backend Endpoints Required:**
 
-   **POST `/api/auth/signup`**  
-   Request:
-   ```json
-   {
-     "firstName": "string",
-     "lastName": "string",
-     "email": "string",
-     "password": "string",
-     "confirmPassword": "string",
-     "address": "string",
-     "phone": "string",
-     "gender": "male|female|other",
-     "dob": "YYYY-MM-DD"
-   }
-   ```
-   
-   Response (201):
-   ```json
-   {
-     "user": {
-       "id": 1,
-       "firstName": "John",
-       "lastName": "Doe",
-       "email": "john@example.com",
-       "phone": "9841234567",
-       "address": "Kathmandu, Nepal",
-       "gender": "male",
-       "dob": "2000-01-01",
-       "role": "customer"
-     },
-     "message": "Account created successfully"
-   }
-   ```
+**POST `/api/auth/signup/`**  
+Request:
+```json
+{
+  "firstName": "string",
+  "lastName": "string",
+  "email": "string",
+  "password": "string",
+  "confirmPassword": "string",
+  "address": "string",
+  "phone": "string",
+  "gender": "male|female|other",
+  "dob": "YYYY-MM-DD"
+}
+```
 
-   **Validations Required:**
-   - Age check: User must be ≥16 years old
-   - Email: Must be `@gmail.com` or `.edu.np`
-   - Password: Min 8 chars, 1 uppercase, 1 lowercase, 1 number, 1 special char
-   - Passwords must match
-   - Email uniqueness check
+Response (201):
+```json
+{
+  "user": {
+    "id": 1,
+    "firstName": "John",
+    "lastName": "Doe",
+    "email": "john@example.com",
+    "phone": "9841234567",
+    "address": "Kathmandu, Nepal",
+    "gender": "male",
+    "dob": "2000-01-01",
+    "role": "customer"
+  },
+  "access": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "refresh": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "message": "Account created successfully"
+}
+```
 
-   **POST `/api/auth/login`**  
-   Request:
-   ```json
-   {
-     "email": "string",
-     "password": "string"
-   }
-   ```
-   
-   Response (200):
-   ```json
-   {
-     "user": {
-       "id": 1,
-       "firstName": "John",
-       "lastName": "Doe",
-       "email": "john@example.com",
-       "phone": "9841234567",
-       "address": "Kathmandu, Nepal",
-       "role": "customer",
-       "token": "jwt_token_here"
-     }
-   }
-   ```
-   
-   Error (401):
-   ```json
-   {
-     "message": "Invalid credentials"
-   }
-   ```
+**Backend Validations (Signup — must mirror frontend):**
+- Age check: User must be ≥16 years old
+- Email: Must be `@gmail.com` or `.edu.np`
+- Password: Min 8 chars, 1 uppercase, 1 lowercase, 1 number, 1 special char
+- Passwords must match
+- Email uniqueness check
+- Phone: Must be exactly 10 digits
 
-3. **Frontend Handles Response:**
-   ```javascript
-   // Login.jsx lines 72-78
-   const userData = data.user || data;
-   if (!userData.role) userData.role = 'customer';
-   login(userData);  // Stores in AuthContext + localStorage
-   navigate('/');    // Redirect to home
-   ```
+**POST `/api/auth/login/`** (same endpoint for owners and customers)  
+Request:
+```json
+{
+  "email": "string",
+  "password": "string"
+}
+```
+
+Response (200):
+```json
+{
+  "user": {
+    "id": 1,
+    "firstName": "Sushant",
+    "lastName": "Adhikari",
+    "email": "owner1@gmail.com",
+    "phone": "9841000001",
+    "address": "Kathmandu, Nepal",
+    "role": "owner"
+  },
+  "access": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "refresh": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+}
+```
+
+Error (401):
+```json
+{
+  "message": "Invalid credentials"
+}
+```
+
+**Frontend Handles Response:**
+```javascript
+// Login.jsx — JWT token storage + role-based redirect
+if (data.access) localStorage.setItem('auth_token', data.access);
+if (data.refresh) localStorage.setItem('refresh_token', data.refresh);
+
+const userData = data.user || data;
+if (!userData.role) userData.role = 'customer';
+login(userData);  // Stores in AuthContext + localStorage
+
+if (userData.role === 'owner') {
+  navigate('/owner/dashboard');  // Owner → dashboard
+} else {
+  navigate('/');                 // Customer → home
+}
+```
 
 ---
 
@@ -1371,47 +1639,62 @@ Profile page displays user data from `AuthContext` (stored in `localStorage` aft
 
 ### AuthContext — Token Management
 
-**Current Implementation:**  
-Stores entire user object in `localStorage` as `customer_user`.
+**Current Implementation (Updated):**  
+Stores user object in `localStorage` as `customer_user`. JWT tokens stored separately as `auth_token` and `refresh_token`.
 
-**Recommended for Production:**
+**On app load (`AuthContext.jsx`):**
+- Checks for both `customer_user` AND `auth_token` in localStorage
+- If either is missing, clears both — forces re-login
+- Prevents stale sessions where user data exists but token has been cleared
 
-1. **Store JWT separately:**
-   ```javascript
-   // After successful login
-   localStorage.setItem('auth_token', data.token);
-   localStorage.setItem('customer_user', JSON.stringify(data.user));
-   ```
+**Login flow:**
+```javascript
+// Login.jsx stores tokens from API response
+localStorage.setItem('auth_token', data.access);     // JWT access token
+localStorage.setItem('refresh_token', data.refresh);  // JWT refresh token
+localStorage.setItem('customer_user', JSON.stringify(userData));  // User object
+```
 
-2. **Update `services/api.js`:**  
-   Already configured! JWT is automatically attached to all requests:
-   ```javascript
-   // frontend/src/services/api.js (lines 11-16)
-   api.interceptors.request.use(
-     (cfg) => {
-       const token = localStorage.getItem('auth_token');
-       if (token) cfg.headers.Authorization = `Bearer ${token}`;
-       return cfg;
-     }
-   );
-   ```
+**Logout flow (`AuthContext.jsx` + `OwnerNavbar.jsx`):**
+```javascript
+// Clears ALL auth data
+localStorage.removeItem('customer_user');
+localStorage.removeItem('auth_token');
+localStorage.removeItem('refresh_token');
+```
 
-3. **Handle token expiry:**  
-   Already implemented! 401 responses auto-clear tokens:
-   ```javascript
-   // frontend/src/services/api.js (lines 20-28)
-   api.interceptors.response.use(
-     (res) => res,
-     (error) => {
-       if (error.response?.status === 401) {
-         localStorage.removeItem('auth_token');
-         localStorage.removeItem('customer_user');
-         window.location.href = '/login';
-       }
-       return Promise.reject(error);
-     }
-   );
-   ```
+**Request interceptor (`services/api.js`):**  
+JWT access token is automatically attached to all Axios requests:
+```javascript
+api.interceptors.request.use((cfg) => {
+  const token = localStorage.getItem('auth_token');
+  if (token) cfg.headers.Authorization = `Bearer ${token}`;
+  return cfg;
+});
+```
+
+**401 Response interceptor (`services/api.js`):**  
+On 401 (expired/invalid token), clears ALL auth data and redirects to login:
+```javascript
+api.interceptors.response.use(
+  (res) => res,
+  (error) => {
+    if (error.response?.status === 401) {
+      localStorage.removeItem('auth_token');
+      localStorage.removeItem('refresh_token');
+      localStorage.removeItem('customer_user');
+      window.location.href = '/login';
+    }
+    return Promise.reject(error);
+  }
+);
+```
+
+**Token refresh (`services/api.js`):**
+```javascript
+authAPI.refreshToken(refreshToken)  // POST /api/auth/refresh/ { refresh: '...' }
+// Returns: { access: 'new_access_token' }
+```
 
 ---
 
@@ -1437,20 +1720,22 @@ VITE_API_BASE_URL=https://yourdomain.com/api
 
 - [ ] Install DRF, CORS, SimpleJWT, Pillow, django-filter (Step 1)
 - [ ] Update `settings.py` — INSTALLED_APPS, CORS, REST_FRAMEWORK, JWT (Step 2)
-- [ ] Create Django apps: `products`, `orders`, `analytics` (Step 3)
-- [ ] Define models: Category, Supplier, Product, Order, OrderItem (Step 4)
+- [ ] Create Django apps: `products`, `orders`, `analytics`, `accounts` (Step 3)
+- [ ] Define models: Category, Supplier, Product, Order, OrderItem, Profile (Step 4)
+- [ ] Create `accounts` app with Profile model (`role`, `phone`, `address`, `gender`, `dob`)
 - [ ] Create serializers for all models (Step 5)
 - [ ] Create views: ProductViewSet, OrderViewSet, 7 analytics APIViews (Steps 6 + 10)
 - [ ] Configure URL routing for all endpoints (Step 7)
 - [ ] Run migrations and create superuser (Step 8)
-- [ ] Seed sample data for testing (Step 9)
+- [ ] Seed 5 owner accounts + sample data for testing (Step 9)
 - [ ] Add `user_phone` to Order serializer (Step 11)
-- [ ] Create `/api/auth/signup` endpoint with validation rules
-- [ ] Create `/api/auth/login` endpoint returning user + JWT token + role field
-- [ ] Create `/api/auth/profile` endpoint (authenticated, returns user data)
-- [ ] Add `role` field to User model (`'customer'` or `'owner'`)
+- [ ] Create `/api/auth/signup/` endpoint with validation rules (mirror frontend validations)
+- [ ] Create `/api/auth/login/` endpoint returning `{ user: {..., role}, access, refresh }`
+- [ ] Create `/api/auth/profile/` endpoint (authenticated, returns user data)
+- [ ] Add `role` field to Profile model (`'customer'` or `'owner'`)
 - [ ] Add CORS configuration for `http://localhost:5173`
-- [ ] Test all 17 API endpoints listed in the endpoint reference table
+- [ ] Seed 5 owners: owner1-5@gmail.com with password `Owner@123` and role `owner`
+- [ ] Test all endpoints in the API endpoint reference table
 
 **Frontend Status (Completed):**
 
@@ -1463,7 +1748,11 @@ VITE_API_BASE_URL=https://yourdomain.com/api
 - [x] Error states with retry buttons on all pages
 - [x] Refresh buttons on all pages to re-fetch data
 - [x] `data/mockData.js` removed — no mock data dependency
-- [x] Owner navbar with navigation
+- [x] Owner navbar with navigation (dynamic user name/email from AuthContext)
 - [x] Owner layout with auth guard
-- [x] Customer login/signup form
+- [x] Customer + Owner login form (same form, backend-validated)
+- [x] Signup form with full field validation
+- [x] JWT token storage (access + refresh) on login
+- [x] JWT token cleanup on logout (AuthContext + api.js 401 interceptor)
+- [x] Role-based redirect (owner → /owner/dashboard, customer → /)
 - [x] Profile page UI

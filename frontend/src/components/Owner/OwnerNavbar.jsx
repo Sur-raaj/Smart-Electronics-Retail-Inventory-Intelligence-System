@@ -12,10 +12,17 @@ const ownerLinks = [
 
 export default function OwnerNavbar() {
   const { pathname } = useLocation();
-  const { logout } = useAuth();
+  const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [showUserMenu, setShowUserMenu] = useState(false);
   const menuRef = useRef(null);
+
+  // Get display name and initials from user context
+  const displayName = user?.firstName
+    ? `${user.firstName}${user.lastName ? ' ' + user.lastName : ''}`
+    : 'Owner';
+  const avatarInitial = user?.firstName ? user.firstName.charAt(0).toUpperCase() : 'O';
+  const displayEmail = user?.email || '';
 
   useEffect(() => {
     const handleClickOutside = (e) => {
@@ -89,10 +96,10 @@ export default function OwnerNavbar() {
             <div className="owner-nav-user-wrap" ref={menuRef}>
               <button className="owner-nav-user-btn" onClick={() => setShowUserMenu(!showUserMenu)}>
                 <div className="owner-nav-avatar">
-                  <span>O</span>
+                  <span>{avatarInitial}</span>
                 </div>
                 <div className="owner-nav-user-info">
-                  <span className="owner-nav-user-name">Owner</span>
+                  <span className="owner-nav-user-name">{displayName}</span>
                   <span className="owner-nav-user-role">Administrator</span>
                 </div>
                 <ChevronDown size={14} className={`owner-chevron ${showUserMenu ? 'open' : ''}`} />
@@ -101,10 +108,10 @@ export default function OwnerNavbar() {
               {showUserMenu && (
                 <div className="owner-nav-dropdown">
                   <div className="owner-dropdown-header">
-                    <div className="owner-dropdown-avatar">O</div>
+                    <div className="owner-dropdown-avatar">{avatarInitial}</div>
                     <div>
-                      <div className="owner-dropdown-name">Owner</div>
-                      <div className="owner-dropdown-email">owner@gmail.com</div>
+                      <div className="owner-dropdown-name">{displayName}</div>
+                      <div className="owner-dropdown-email">{displayEmail}</div>
                     </div>
                   </div>
                   <div className="owner-dropdown-divider" />
