@@ -6,7 +6,7 @@ class Paymentmethods(models.Model):
     methodname = models.CharField(db_column='MethodName', unique=True, max_length=50, db_collation='SQL_Latin1_General_CP1_CI_AS')  # Field name made lowercase.
 
     class Meta:
-        managed = False
+        managed =False
         db_table = 'PaymentMethods'
 
 
@@ -18,8 +18,8 @@ class Payments(models.Model):
     methodid = models.ForeignKey(Paymentmethods, models.DO_NOTHING, db_column='MethodID')  # Field name made lowercase.
     discountpercent = models.DecimalField(db_column='DiscountPercent', max_digits=5, decimal_places=2, blank=True, null=True)  # Field name made lowercase.
     payableamount = models.DecimalField(db_column='PayableAmount', max_digits=10, decimal_places=2, blank=True, null=True)  # Field name made lowercase.
-    paidat = models.DateTimeField(db_column='PaidAt')
+    paidat = models.DateTimeField(db_column='PaidAt',auto_now_add=True)
     class Meta:
-        managed = False
+        managed =False
         db_table = 'Payments'
 

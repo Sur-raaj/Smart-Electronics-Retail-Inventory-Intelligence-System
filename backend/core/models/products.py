@@ -17,9 +17,9 @@ class Products(models.Model):
     productimageurl = models.CharField(db_column='ProductImageURL', max_length=255, db_collation='SQL_Latin1_General_CP1_CI_AS', blank=True, null=True)  # Field name made lowercase.
     productspecifications = models.CharField(db_column='ProductSpecifications', max_length=3000, db_collation='SQL_Latin1_General_CP1_CI_AS', blank=True, null=True)  # Field name made lowercase.
     unitssold = models.IntegerField(db_column='UnitsSold')  # Field name made lowercase.
-    createdat = models.DateTimeField(db_column='createdAt')  # Field name made lowercase.
-    updatedat = models.DateTimeField(db_column='updatedAt')  # Field name made lowercase.
+    createdat = models.DateTimeField(db_column='createdAt',auto_now_add=True)  # Field name made lowercase.
+    updatedat = models.DateTimeField(db_column='updatedAt',auto_now=True)  # Field name made lowercase.
 
     class Meta:
-        managed = False
+        managed =False
         db_table = 'Products'

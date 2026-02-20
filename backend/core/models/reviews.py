@@ -8,8 +8,8 @@ class Reviews(models.Model):
     customerid = models.ForeignKey(Customers, models.DO_NOTHING, db_column='CustomerID')  # Field name made lowercase.
     rating = models.DecimalField(db_column='Rating', max_digits=1, decimal_places=1, blank=True, null=True)  # Field name made lowercase.
     comment = models.CharField(db_column='Comment', max_length=255, db_collation='SQL_Latin1_General_CP1_CI_AS', blank=True, null=True)  # Field name made lowercase.
-    reviewdate = models.DateTimeField(db_column='ReviewDate')  # Field name made lowercase.
+    reviewdate = models.DateTimeField(db_column='ReviewDate',auto_now_add=True)  # Field name made lowercase.
 
     class Meta:
-        managed = False
+        managed =False
         db_table = 'Reviews'

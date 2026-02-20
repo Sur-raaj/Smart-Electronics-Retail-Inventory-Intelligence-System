@@ -8,7 +8,7 @@ class ViewActiveCustomers(models.Model):
     phone = models.CharField(db_column='Phone',max_length=20)
 
     class Meta:
-        managed=False
+        managed =False
         db_table = 'vw_ActiveCustomers'
 
 class ViewOrderSummary(models.Model):
@@ -19,7 +19,7 @@ class ViewOrderSummary(models.Model):
     totalamount = models.DecimalField(db_column='TotalAmount', max_digits=10, decimal_places=2)
 
     class Meta:
-        managed = False
+        managed =False
         db_table = 'vw_OrderSummary'
 
 
@@ -35,7 +35,7 @@ class ViewProductInventory(models.Model):
     reorderlevel = models.IntegerField(db_column='ReorderLevel')
 
     class Meta:
-        managed = False
+        managed =False
         db_table = 'vw_ProductInventory'
 
 
@@ -46,5 +46,5 @@ class ViewLowStockProducts(models.Model):
     reorderlevel = models.IntegerField(db_column='ReorderLevel')
 
     class Meta:
-        managed = False
+        managed =False
         db_table = 'vw_LowStockProducts'

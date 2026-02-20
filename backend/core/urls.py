@@ -31,4 +31,5 @@ analytics_router.register(r'low-stock-products', ViewLowStockProductViewSet)
 urlpatterns = [
      path('',include(router.urls)),
      path('analytics/',include(analytics_router.urls))
+   
 ]

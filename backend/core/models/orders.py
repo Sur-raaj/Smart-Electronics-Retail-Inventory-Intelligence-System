@@ -9,7 +9,7 @@ class Categories(models.Model):
     categoryname = models.CharField(db_column='CategoryName', max_length=50, db_collation='SQL_Latin1_General_CP1_CI_AS')  # Field name made lowercase.
 
     class Meta:
-        managed = False
+        managed =False
         db_table = 'Categories'
 
 
@@ -18,7 +18,7 @@ class Orderstatus(models.Model):
     statusname = models.CharField(db_column='StatusName', unique=True, max_length=50, db_collation='SQL_Latin1_General_CP1_CI_AS')  # Field name made lowercase.
 
     class Meta:
-        managed = False
+        managed =False
         db_table = 'OrderStatus'
 
 
@@ -31,11 +31,11 @@ class Orders(models.Model):
     totalamount = models.DecimalField(db_column='TotalAmount', max_digits=10, decimal_places=2)  # Field name made lowercase.
     estimateddeliverydate = models.DateTimeField(db_column='EstimatedDeliveryDate', blank=True, null=True)  # Field name made lowercase.
     trackingnumber = models.CharField(db_column='TrackingNumber', max_length=50, db_collation='SQL_Latin1_General_CP1_CI_AS', blank=True, null=True)  # Field name made lowercase.
-    createdat = models.DateTimeField(db_column='CreatedAt')  # Field name made lowercase.
-    updatedat = models.DateTimeField(db_column='UpdatedAt')  # Field name made lowercase.
+    createdat = models.DateTimeField(db_column='CreatedAt',auto_now_add=True)  # Field name made lowercase.
+    updatedat = models.DateTimeField(db_column='UpdatedAt',auto_now=True)  # Field name made lowercase.
 
     class Meta:
-        managed = False
+        managed =False
         db_table = 'Orders'
 
 
@@ -48,7 +48,7 @@ class Orderdetails(models.Model):
     totalprice = models.DecimalField(db_column='TotalPrice', max_digits=21, decimal_places=2, blank=True, null=True)  # Field name made lowercase.
 
     class Meta:
-        managed = False
+        managed =False
         db_table = 'OrderDetails'   
 
 
@@ -57,10 +57,10 @@ class Whishlist(models.Model):
     wishlistid = models.AutoField(db_column='WishlistID', primary_key=True)  # Field name made lowercase.
     customerid = models.ForeignKey(Customers, models.DO_NOTHING, db_column='CustomerID')  # Field name made lowercase.
     productid = models.ForeignKey('Products', models.DO_NOTHING, db_column='ProductID')  # Field name made lowercase.
-    addedat = models.DateTimeField(db_column='AddedAt')  # Field name made lowercase.
+    addedat = models.DateTimeField(db_column='AddedAt',auto_now_add=True)  # Field name made lowercase.
 
     class Meta:
-        managed = False
+        managed =False
         db_table = 'Whishlist'
 
 class Cart(models.Model):
@@ -68,10 +68,10 @@ class Cart(models.Model):
     customerid = models.ForeignKey('Customers', models.DO_NOTHING, db_column='CustomerID')  # Field name made lowercase.
     productid = models.ForeignKey('Products', models.DO_NOTHING, db_column='ProductID')  # Field name made lowercase.
     ordercount = models.IntegerField(db_column='OrderCount')  # Field name made lowercase.
-    createdat = models.DateTimeField(db_column='CreatedAt')  # Field name made lowercase.
+    createdat = models.DateTimeField(db_column='CreatedAt',auto_now_add=True)  # Field name made lowercase.
 
     class Meta:
-        managed = False
+        managed =False
         db_table = 'Cart'
 
 class Purchaseorders(models.Model):
@@ -80,11 +80,11 @@ class Purchaseorders(models.Model):
     orderdate = models.DateTimeField(db_column='OrderDate')  # Field name made lowercase.
     totalamount = models.DecimalField(db_column='TotalAmount', max_digits=10, decimal_places=2, blank=True, null=True)  # Field name made lowercase.
     expecteddeliverydate = models.DateTimeField(db_column='ExpectedDeliveryDate', blank=True, null=True)  # Field name made lowercase.
-    createdat = models.DateTimeField(db_column='CreatedAt')  # Field name made lowercase.
+    createdat = models.DateTimeField(db_column='CreatedAt',auto_now_add=True)  # Field name made lowercase.
     orderstatusid = models.ForeignKey(Orderstatus, models.DO_NOTHING, db_column='OrderStatusID', blank=True, null=True)  # Field name made lowercase.
 
     class Meta:
-        managed = False
+        managed =False
         db_table = 'PurchaseOrders'
 
 class Purchaseorderdetails(models.Model):
@@ -96,5 +96,5 @@ class Purchaseorderdetails(models.Model):
     totalcost = models.DecimalField(db_column='TotalCost', max_digits=21, decimal_places=2, blank=True, null=True)  # Field name made lowercase.
 
     class Meta:
-        managed = False
+        managed =False
         db_table = 'PurchaseOrderDetails'
