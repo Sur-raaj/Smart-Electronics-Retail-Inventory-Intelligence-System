@@ -17,7 +17,7 @@ class Customers(models.Model):
         managed =False
         db_table = 'Customers'
 
-
+   
 class CustomerAddress(models.Model):
     addressid = models.AutoField(db_column='AddressID', primary_key=True)  # Field name made lowercase.
     customerid = models.ForeignKey('Customers', models.DO_NOTHING, db_column='CustomerID')  # Field name made lowercase.
