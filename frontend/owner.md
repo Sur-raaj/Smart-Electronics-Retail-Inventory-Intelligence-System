@@ -1,6 +1,6 @@
 # Backend & Database Integration Guide — Complete System
 
-> **For the Backend (Django) and MS SQL Developer**: The frontend for all three roles (**Owner**, **Warehouse**, **Customer**) is **fully built**. Every page calls real API endpoints via Axios (no mock data). Follow this guide to build the Django REST Framework backend + MS SQL Server database.
+> **For the Backend (Django) and MS SQL Developer**: The frontend for all roles (**Customer**, **Owner**, **Warehouse**, **Admin**) is built, with JWT auth and role-guarded layouts. Owner/Warehouse/Admin pages are API-integrated via Axios; some customer screens still run local-state flows and are ready to be connected to backend endpoints. Follow this guide to build the Django REST Framework backend + MS SQL Server database.
 
 ---
 
@@ -14,8 +14,9 @@
 6. [Owner API Endpoints](#6-owner-api-endpoints)
 7. [Warehouse API Endpoints](#7-warehouse-api-endpoints)
 8. [Customer API Endpoints](#8-customer-api-endpoints)
-9. [Frontend File Map](#9-frontend-file-map)
-10. [Quick Start Checklist](#10-quick-start-checklist)
+9. [Admin API Endpoints](#9-admin-api-endpoints)
+10. [Frontend File Map](#10-frontend-file-map)
+11. [Quick Start Checklist](#11-quick-start-checklist)
 
 ---
 
@@ -40,7 +41,9 @@
 
 ### Auth Bypass (for testing without backend)
 
-Add `?bypassAuth=owner`, `?bypassAuth=warehouse`, or `?bypassAuth=admin` to any URL. This creates a fake user in context and persists in localStorage.
+Add `?bypassAuth=owner`, `?bypassAuth=warehouse`, or `?bypassAuth=admin` to any URL. You can also use `?bypass=owner|warehouse|admin` as a shorthand. This creates a fake user in context and persists in localStorage.
+
+To check the admin panel directly, open: `http://localhost:5173/admin/dashboard?bypassAuth=admin`
 
 ---
 
@@ -904,7 +907,9 @@ ALTER TABLE suppliers ADD
 
 ## 8. Customer API Endpoints
 
-The Customer section has these pages: **Home** (product listing), **Cart**, **Checkout**, **Wishlist**, **Compare**, **Profile**, **Login/Register**.
+The Customer section has these pages: **Home**, **Product Detail** (`/product/:id`), **Cart**, **Checkout**, **Wishlist**, **Compare**, **Profile**, **Login/Register**.
+
+> Note: customer API endpoints are fully defined in `src/services/api.js`, but current customer UI flow still uses significant local React state for cart/wishlist/compare/checkout while backend integration is being completed.
 
 ### 8.1 Product Browsing
 
@@ -1253,7 +1258,7 @@ class IsAdminRole(BasePermission):
 frontend/src/
 ├── Config/
 │   └── Config.js                  ← API base URL, token keys
-├── Context/
+├── context/
 │   └── AuthContext.jsx            ← Auth state, login/logout, role checks (isOwner/isWarehouse/isAdmin), bypass auth
 ├── services/
 │   └── api.js                     ← Axios instance + ownerAPI + warehouseAPI + customerAPI + adminAPI + authAPI
@@ -1292,9 +1297,10 @@ frontend/src/
 │       └── RoleBadge.jsx          ← Role badge component (Customer=gray, Owner=blue, Warehouse=orange, Admin=red)
 │
 ├── pages/
-│   ├── Home.jsx                   ← Product listing, search, category filter
+│   ├── Home.jsx                   ← Product showcase (featured items), category cards, add to cart/wishlist/compare actions
 │   ├── Customer/
 │   │   ├── Login.jsx              ← Login/Register with role selector
+│   │   ├── ProductDetail.jsx      ← Product detail page (`/product/:id`) with API + fallback data
 │   │   ├── Cart.jsx               ← Shopping cart
 │   │   ├── Checkout.jsx           ← Checkout with address + payment
 │   │   ├── Wishlist.jsx           ← Saved products
@@ -1317,7 +1323,7 @@ frontend/src/
 │       ├── SystemLogs.jsx         ← Log table, date range, multi-filter, CSV export, pagination
 │       └── AnalyticsSummary.jsx   ← Revenue cards, multi-chart analytics, customer insights
 │
-└── App.jsx                        ← Routes: / (customer), /owner/*, /warehouse/*, /admin/*
+└── App.jsx                        ← Routes: /, /product/:id, /wishlist, /cart, /compare, /checkout, /login, /profile, /owner/*, /warehouse/*, /admin/*
 ```
 
 ---

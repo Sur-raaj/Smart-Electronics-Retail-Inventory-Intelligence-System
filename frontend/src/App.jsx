@@ -12,6 +12,7 @@ import Login from './pages/Customer/Login'
 import Checkout from './pages/Customer/Checkout'
 import Compare from './pages/Customer/Compare'
 import Profile from './pages/Customer/Profile'
+import ProductDetail from './pages/Customer/ProductDetail'
 
 // Owner Pages
 import OwnerDashboard from './pages/Owner/Dashboard'
@@ -189,6 +190,7 @@ export default function App() {
           <Route path="/cart" element={<Cart cartItems={cartItems} updateCartQuantity={updateCartQuantity} removeFromCart={removeFromCart} clearCart={clearCart} checkoutSelection={checkoutSelection} setCheckoutItems={setCheckoutItems} />} />
           <Route path="/compare" element={<Compare items={compareItems} removeFromCompare={removeFromCompare} addToCart={addToCart} />} />
           <Route path="/checkout" element={<Checkout cartItems={cartItems} selectedIds={checkoutSelection} onPaymentSuccess={removePurchasedFromCart} />} />
+          <Route path="/product/:id" element={<ProductDetail addToCart={addToCart} toggleWishlist={toggleWishlist} wishlistItems={wishlistItems} />} />
           <Route path="/login" element={<Login />} />
           <Route path="/profile" element={<Profile />} />
 

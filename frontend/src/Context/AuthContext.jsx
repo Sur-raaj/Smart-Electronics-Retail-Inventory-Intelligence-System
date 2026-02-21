@@ -10,7 +10,7 @@ export const AuthProvider = ({ children }) => {
   useEffect(() => {
     // Check for bypass auth in URL (for testing without backend)
     const params = new URLSearchParams(window.location.search);
-    const bypassAuth = params.get('bypassAuth');
+    const bypassAuth = (params.get('bypassAuth') || params.get('bypass') || '').toLowerCase();
 
     let testUser = null;
 
